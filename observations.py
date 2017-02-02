@@ -4,7 +4,7 @@ import os
 from astropy.io import fits
 import disperse
 from scipy import sparse
-
+from astropy.table import Table
 
 def helper(vars):
     x0s,y0s,f,order,C,ID = vars # in this case ID is dummy number
@@ -18,7 +18,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,passband=None,order="+1",plot=0):
+    def __init__(self,direct_images,segmentation_data,config,passband=None,passband_unit="mu",order="+1",plot=0):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -26,7 +26,12 @@ class observation():
         order: The name of the spectral order to simulate, +1 or +2 for NIRCAM
         """
 
-        self.C = grismconf.Config(config,passband=passband)
+        passband_tab = Table.read(passband,format="ascii.no_header",data_start=1)
+        # Convert bandpass to angstrom
+        if passband_unit=="mu":
+            passband_tab['col1'] = passband_tab['col1']*10000
+
+        self.C = grismconf.Config(config,passband_tab=passband_tab)
 
         if plot:
             import matplotlib.pyplot as plt
@@ -101,6 +106,9 @@ class observation():
             y = y[vg]
             f = f[vg]
             
+            if len(x)<1:
+                continue
+
             minx = min(x)
             maxx= max(x)
             miny = min(y)
