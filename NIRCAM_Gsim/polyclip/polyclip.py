@@ -4,11 +4,11 @@ import ctypes
 from ctypes import c_int
 import os
 
-print __file__
+#print __file__
 this_path = os.path.split(__file__)[0]
-print this_path
+#print this_path
 
-polyclip = ctypes.cdll.LoadLibrary(os.path.join(this_path,"polyclip.so"))
+polyclip = ctypes.cdll.LoadLibrary(os.path.join(this_path,"polyclip_c.so"))
 
 array_1d_int_l = npct.ndpointer(dtype=np.int32, ndim=1, flags='CONTIGUOUS')
 array_1d_int_r = npct.ndpointer(dtype=np.int32, ndim=1, flags='CONTIGUOUS')
