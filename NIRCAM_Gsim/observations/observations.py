@@ -96,8 +96,8 @@ class observation():
         for c in range(len(self.xs)):
             print c+1,"of",len(self.xs)
             self.disperse_chunk(c)
-            import nf
-            nf.disp(self.simulated_image,2)
+            #import nf
+            #nf.disp(self.simulated_image,2)
 
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
