@@ -19,24 +19,29 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,passband=None,passband_unit="mu",order="+1",plot=0,max_split=100):
+    def __init__(self,direct_images,segmentation_data,config,cross_filter=None,passband_unit="mu",order="+1",plot=0,max_split=100,SED_file=None):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
         passband: The name of a direct filter passband file, ascii, 1st column being wavelength in A and second the throughput
         order: The name of the spectral order to simulate, +1 or +2 for NIRCAM
+        max_split: Number of chunks to compute instead of trying everything at once.
+        SED_file: Name of HDF5 file containing datasets matching the ID in the segmentation file and each consisting of a [[lambda],[flux]] array.
         """
 
-        if passband!=None:
-            passband_tab = Table.read(passband,format="ascii.no_header",data_start=1)
-            # Convert bandpass to angstrom
-            if passband_unit=="mu":
-                passband_tab['col1'] = passband_tab['col1']*10000
-        else:
-            passband_tab = None
+        # if passband!=None:
+        #     passband_tab = Table.read(passband,format="ascii.no_header",data_start=1)
+        #     # Convert bandpass to angstrom
+        #     if passband_unit=="mu":
+        #         passband_tab['col1'] = passband_tab['col1']*10000
+        # else:
+        #     passband_tab = None
             
-        self.C = grismconf.Config(config,passband_tab=passband_tab)
-
+        self.C = grismconf.Config(config,cross_filter=cross_filter)
+        if self.C.__version__!=1.1:
+            print "Need grismconf v.1.1"
+            sys.exit(-1)
+            
         if plot:
             import matplotlib.pyplot as plt
             plt.ion()
@@ -48,8 +53,9 @@ class observation():
         self.seg = segmentation_data
         self.dims = np.shape(self.seg)
         self.order = order
-        self.create_pixel_list()
+        self.SED_file = SED_file
 
+        self.create_pixel_list()
         
         self.p_l = []
         self.p_a = []
@@ -68,28 +74,36 @@ class observation():
             self.fs[l] = np.array_split(self.fs[l],max_split)
 
     def create_pixel_list(self):
-        # This function needs to be modified to handle the flux calibration better. i.e read keywords from file to get
-        # wavelength and fnuphot value. Right now we get wavelength from filename and fnuphot is a constant
+
         self.ys,self.xs = np.nonzero(self.seg)
 
         print len(self.xs),"pixels to process"
         self.fs = {}
         for dir_image in self.dir_images:
-            try:
-                l = fits.getval(dir_image,'pivotwav') * 10000.
-            except:
-                print("WARNING: unable to find PIVOTWAV keyword in {}".format(dir_image))
-                sys.exit()
+            if self.SED_file==None:
+                try:
+                    l = fits.getval(dir_image,'PHOTPLAM') 
+                except:
+                    print("WARNING: unable to find PHOTPLAM keyword in {}".format(dir_image))
+                    sys.exit()
 
+                try:
+                    photflam = fits.getval(dir_image,'photflam')
+                except:
+                    print("WARNING: unable to find PHOTFLAM keyword in {}".format(dir_image))
+                    sys.exit()
+                print("Loaded",dir_image, "wavelength:",l,"A")
             try:
-                photflam = fits.getval(dir_image,'photflam')
+                d = fits.open(dir_image)[1].data
             except:
-                print("WARNING: unable to find PHOTFLAM keyword in {}".format(dir_image))
-                sys.exit()
-            print "Loaded",dir_image, "wavelength:",l,"A"
-            d = fits.open(dir_image)[1].data
-            self.fs[l] = d[self.ys,self.xs] * photflam
+                d = fits.open(dir_image)[0].data
 
+            # If we do not use an SED file then we use photometry to get fluxes
+            # Otherwise, we assume that objects are normalized to 1.
+            if self.SED_file==None:
+                self.fs[l] = d[self.ys,self.xs] * photflam
+            else:
+                self.fs["SED"] = d[self.ys,self.xs] 
 
     def disperse_all(self):
         self.simulated_image = np.zeros(self.dims,np.float)
@@ -105,14 +119,49 @@ class observation():
         from progressbar import Bar, ETA, ReverseBar, ProgressBar, Percentage
         import time
 
-        pars = []
-        for i in range(len(self.xs[c])):
-            ID = i
-            xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
-            ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-            lams = self.fs.keys()
-            f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
-            pars.append([xs0,ys0,f,self.order,self.C,ID])
+        if self.SED_file!=None:
+            import h5py
+            h5f = h5py.File(self.SED_file,'r')
+            # b = h5f['16524'][:]
+            pars = []
+            for i in range(len(self.xs[c])):
+                ID = int(self.seg[self.ys[c][i],self.xs[c][i]])
+                #print ID,self.ys[c][i],self.xs[c][i]
+                tmp = h5f["%s" % (ID)][:]
+                lams = tmp[0]
+                fffs = tmp[1]*self.fs["SED"][c][i]
+                f = [lams,fffs]
+
+                #print f
+                xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
+                ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
+                pars.append([xs0,ys0,f,self.order,self.C,ID])
+            h5f.close()
+        #sys.exit(1)
+        # test...
+        # def Gaussian1D(x,A,mu,sigma):
+        #     return A/(sigma*np.sqrt(2*np.pi)) * np.exp(-0.5*((x-mu)/sigma)**2)
+        # lams = np.arange(20000.,50000,5)
+        # fffs = Gaussian1D(lams,1e-17,35000,5)+Gaussian1D(lams,2e-17,37000,5)+Gaussian1D(lams,3e-17,36000,5)
+        # f = [lams,fffs]
+        # pars = []
+        # for i in range(len(self.xs[c])):
+        #     ID = i
+        #     xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
+        #     ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
+        #     pars.append([xs0,ys0,f,self.order,self.C,ID])
+        #
+
+        else:
+        # good code below
+            pars = []
+            for i in range(len(self.xs[c])):
+                ID = i
+                xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
+                ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
+                lams = self.fs.keys()
+                f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
+                pars.append([xs0,ys0,f,self.order,self.C,ID])
 
         print len(pars),"pixels loaded for dispersion..."
         
