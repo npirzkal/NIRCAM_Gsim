@@ -19,34 +19,27 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,cross_filter=None,passband_unit="mu",order="+1",plot=0,max_split=100,SED_file=None):
+    def __init__(self,direct_images,segmentation_data,config,cross_filter=None,mod="A",order="+1",plot=0,max_split=100,SED_file=None):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
         passband: The name of a direct filter passband file, ascii, 1st column being wavelength in A and second the throughput
+        mod: Module, A or B
         order: The name of the spectral order to simulate, +1 or +2 for NIRCAM
         max_split: Number of chunks to compute instead of trying everything at once.
         SED_file: Name of HDF5 file containing datasets matching the ID in the segmentation file and each consisting of a [[lambda],[flux]] array.
         """
 
-        # if passband!=None:
-        #     passband_tab = Table.read(passband,format="ascii.no_header",data_start=1)
-        #     # Convert bandpass to angstrom
-        #     if passband_unit=="mu":
-        #         passband_tab['col1'] = passband_tab['col1']*10000
-        # else:
-        #     passband_tab = None
-            
-        self.C = grismconf.Config(config,cross_filter=cross_filter)
-        if self.C.__version__!=1.1:
-            print "Need grismconf v.1.1"
+        self.C = grismconf.Config(config)
+        if self.C.__version__!=1.2:
+            print "Need grismconf v.1.2"
             sys.exit(-1)
             
         if plot:
             import matplotlib.pyplot as plt
             plt.ion()
             plt.clf()
-            x = np.arange(self.C.WMIN,self.C.WMAX,10)
+            x = np.arange(self.C.WMIN,self.C.WMAX,(self.C.WMAX,self.C.WMIN)/100.)
             plt.plot(x,self.C.SENS[order](x))
 
         self.dir_images = direct_images
@@ -82,7 +75,7 @@ class observation():
         for dir_image in self.dir_images:
             if self.SED_file==None:
                 try:
-                    l = fits.getval(dir_image,'PHOTPLAM') 
+                    l = fits.getval(dir_image,'PHOTPLAM') / 10000. # in Angsrrom and we want Micron now
                 except:
                     print("WARNING: unable to find PHOTPLAM keyword in {}".format(dir_image))
                     sys.exit()
@@ -103,7 +96,7 @@ class observation():
             if self.SED_file==None:
                 self.fs[l] = d[self.ys,self.xs] * photflam
             else:
-                self.fs["SED"] = d[self.ys,self.xs] 
+                self.fs["SED"] = d[self.ys,self.xs]
 
     def disperse_all(self):
         self.simulated_image = np.zeros(self.dims,np.float)
@@ -126,13 +119,11 @@ class observation():
             pars = []
             for i in range(len(self.xs[c])):
                 ID = int(self.seg[self.ys[c][i],self.xs[c][i]])
-                #print ID,self.ys[c][i],self.xs[c][i]
                 tmp = h5f["%s" % (ID)][:]
                 lams = tmp[0]
                 fffs = tmp[1]*self.fs["SED"][c][i]
                 f = [lams,fffs]
 
-                #print f
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
                 pars.append([xs0,ys0,f,self.order,self.C,ID])

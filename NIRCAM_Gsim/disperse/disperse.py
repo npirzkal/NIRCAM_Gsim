@@ -74,7 +74,7 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2):
     ys  = y[0:nclip_poly[0]]
     areas = areas[0:nclip_poly[0]]
     lams = np.take(lambdas,index)[0:len(xs)]
-    counts = f(lams)*areas*s(lams)*np.abs(dw)/oversample_factor
+    counts = f(lams)*areas*s(lams)*np.abs(dw)/oversample_factor * 10000. # factor of 10000 because dw is in micron and we want Angstrom with to apply f(lams)
 
     vg = (xs>=0) & (ys>=0)
 
