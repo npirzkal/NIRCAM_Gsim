@@ -72,6 +72,7 @@ class observation():
         print len(self.xs),"pixels to process"
         self.fs = {}
         for dir_image in self.dir_images:
+            print "dir image:",dir_image
             if self.SED_file==None:
                 try:
                     l = fits.getval(dir_image,'PHOTPLAM') / 10000. # in Angsrrom and we want Micron now
