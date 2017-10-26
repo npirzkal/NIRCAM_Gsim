@@ -48,14 +48,28 @@ class Grism_seed():
 			self.this_one[order] = NIRCAM_Gsim.observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split)
 			self.this_one[order].disperse_all()
 
-	def finalize(self,tofits=None):
-		final = fits.open(os.path.join(self.config_path,"%s_%s_back_V2.1.fits" % (self.cross_filter,self.mode)))[0].data * 0
+	def finalize(self,tofits=None,noBack=False):
+		if noBack==False:
+			final = fits.open(os.path.join(self.config_path,"%s_%s_back_V2.1.fits" % (self.cross_filter,self.mode)))[0].data
+		else:
+			final = 0.
 		for order in self.this_one.keys():
 			print order
 			sim = self.this_one[order].simulated_image[self.ystart:self.yend+1,self.xstart:self.xend+1]
 			final = final + sim
 		self.final = final	
 		print np.shape(final)
+		if tofits!=None:
+			self.saveSingleFits(tofits)
+
+	def saveSingleFits(self,name):
+		#save an array into the first extension of a fits file
+		h0 = fits.PrimaryHDU()
+		h1 = fits.ImageHDU(self.final,name='DATA')
+        
+        
+		hdulist = fits.HDUList([h0,h1])
+		hdulist.writeto(name,overwrite=True)
 
 if __name__ == '__main__':
 	import glob
