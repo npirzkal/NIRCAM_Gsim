@@ -1,2 +1,2 @@
-from observations import *
-import grism_seed_disperser
+from NIRCAM_Gsim.observations import *
+import NIRCAM_Gsim.grism_seed_disperser
