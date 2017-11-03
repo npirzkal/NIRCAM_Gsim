@@ -31,7 +31,7 @@ class observation():
 
         self.C = grismconf.Config(config)
         if self.C.__version__!=1.2:
-            print "Need grismconf v.1.2"
+            print("Need grismconf v.1.2")
             sys.exit(-1)
             
         if plot:
@@ -59,7 +59,7 @@ class observation():
         self.maxy = int(max(self.ys))
 
 
-        print "Splitting in chunks of",max_split
+        print("Splitting in chunks of",max_split)
         self.xs = np.array_split(self.xs,max_split)
         self.ys = np.array_split(self.ys,max_split)
         for l in self.fs.keys():
@@ -69,10 +69,10 @@ class observation():
 
         self.ys,self.xs = np.nonzero(self.seg)
 
-        print len(self.xs),"pixels to process"
+        print(len(self.xs),"pixels to process")
         self.fs = {}
         for dir_image in self.dir_images:
-            print "dir image:",dir_image
+            print("dir image:",dir_image)
             if self.SED_file==None:
                 try:
                     l = fits.getval(dir_image,'PHOTPLAM') / 10000. # in Angsrrom and we want Micron now
@@ -101,7 +101,7 @@ class observation():
     def disperse_all(self):
         self.simulated_image = np.zeros(self.dims,np.float)
         for c in range(len(self.xs)):
-            print c+1,"of",len(self.xs)
+            print(c+1,"of",len(self.xs))
             self.disperse_chunk(c)
             #import nf
             #nf.disp(self.simulated_image,2)
@@ -154,7 +154,7 @@ class observation():
                 f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
                 pars.append([xs0,ys0,f,self.order,self.C,ID])
 
-        print len(pars),"pixels loaded for dispersion..."
+        print(len(pars),"pixels loaded for dispersion...")
         
         time1 = time.time()
         mypool = Pool(10) # Create pool
@@ -193,7 +193,7 @@ class observation():
         pbar.finish()
         time2 = time.time()
 
-        print time2-time1,"s."
+        print(time2-time1,"s.")
         #return simulated_image
 
     def show(self):
