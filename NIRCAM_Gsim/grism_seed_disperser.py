@@ -5,11 +5,11 @@ Code to generate NIRCAM dispersed seed images. Starting with a set of imaging se
 potentially with padding, given a NIRCAM GRISMCONF configuration file
 """
 
-import NIRCAM_Gsim 
 import os
 from astropy.io import fits
 import numpy as np
-
+from .observations.observations \
+        import observation as NIRCAM_Gsim_observation 
 
 class Grism_seed():
 	def __init__(self,image_seeds,cross_filter,mode,config_path="."):
@@ -32,7 +32,7 @@ class Grism_seed():
 		self.ystart = h["NOMYSTRT"]
 		self.yend = h["NOMYEND"]
 
-		print self.xstart,self.xend,self.xend-self.xstart
+		#print(self.xstart,self.xend,self.xend-self.xstart)
 
 		# Get segmenationation info, from the first image seed.
 		self.seg_data = fits.open(image_seeds[0])[2].data
@@ -45,7 +45,7 @@ class Grism_seed():
 		# max_split: we use max_split groups of pixels to disperse the whole image
 		self.this_one = {}
 		for order in orders:
-			self.this_one[order] = NIRCAM_Gsim.observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split)
+			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split)
 			self.this_one[order].disperse_all()
 
 	def finalize(self,tofits=None,noBack=False):
@@ -54,11 +54,11 @@ class Grism_seed():
 		else:
 			final = 0.
 		for order in self.this_one.keys():
-			print order
+			print(order)
 			sim = self.this_one[order].simulated_image[self.ystart:self.yend+1,self.xstart:self.xend+1]
 			final = final + sim
 		self.final = final	
-		print np.shape(final)
+		print(np.shape(final))
 		if tofits!=None:
 			self.saveSingleFits(tofits)
 

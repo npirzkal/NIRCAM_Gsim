@@ -5,7 +5,9 @@ from astropy.io import fits
 from scipy import sparse
 from astropy.table import Table
 #from NIRCAM_Gsim import polyclip
-from NIRCAM_Gsim.disperse import *
+#from NIRCAM_Gsim.disperse import *
+from ..disperse.disperse import dispersed_pixel
+
 
 def helper(vars):
     x0s,y0s,f,order,C,ID = vars # in this case ID is dummy number
@@ -109,7 +111,7 @@ class observation():
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
         from multiprocessing import Pool
-        from progressbar import Bar, ETA, ReverseBar, ProgressBar, Percentage
+        #from progressbar import Bar, ETA, ReverseBar, ProgressBar, Percentage
         import time
 
         if self.SED_file!=None:
@@ -150,7 +152,7 @@ class observation():
                 ID = i
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-                lams = self.fs.keys()
+                lams = list(self.fs.keys())
                 f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
                 pars.append([xs0,ys0,f,self.order,self.C,ID])
 
@@ -161,8 +163,8 @@ class observation():
         all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
         mypool.close() # No more work
 
-        widgets=[Percentage(), Bar(), ETA()]
-        pbar = ProgressBar(widgets=widgets, maxval=len(pars)).start()
+        #widgets=[Percentage(), Bar(), ETA()]
+        #pbar = ProgressBar(widgets=widgets, maxval=len(pars)).start()
 
         #simulated_image = np.zeros(self.dims,np.float)
         for i,pp in enumerate(all_res, 1):        
@@ -188,9 +190,9 @@ class observation():
             a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
             self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
             
-            if i % len(pars)/100:
-                pbar.update(i)
-        pbar.finish()
+            #if i % len(pars)/100:
+            #    pbar.update(i)
+        #pbar.finish()
         time2 = time.time()
 
         print(time2-time1,"s.")

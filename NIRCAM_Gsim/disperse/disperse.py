@@ -1,7 +1,6 @@
 from scipy.interpolate import interp1d
 import numpy as np
-#from polyclip_c import polyclip
-from NIRCAM_Gsim.polyclip import polyclip
+from ..polyclip.polyclip import polyclip
 
 
 def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2):
