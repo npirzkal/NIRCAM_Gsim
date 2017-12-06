@@ -37,9 +37,6 @@ class Grism_seed():
 		# Get segmenationation info, from the first image seed.
 		self.seg_data = fits.open(image_seeds[0])[2].data
 
-		# TEST
-		self.seg_data[self.seg_data!=1926.]=0.
-
 	def observation(self,orders=["+1","+2"],max_split=100):
 		# order: dispersion order, e.g. "+1"
 		# max_split: we use max_split groups of pixels to disperse the whole image
