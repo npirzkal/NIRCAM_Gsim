@@ -3,9 +3,12 @@ import numpy as np
 from ..polyclip.polyclip import polyclip
 
 
-def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2):
-    f = interp1d(f0[0],f0[1],fill_value=0.,bounds_error=False)
-    
+def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=False):
+    if extrapolate_SED==False:
+        f = interp1d(f0[0],f0[1],fill_value=0.,bounds_error=False)
+    else:
+        f = interp1d(f0[0],f0[1],fill_value="extrapolate",bounds_error=False)
+
     #s = interp1d(sens[order][0],sens[order][1],fill_value=0,bounds_error=False)
     s = C.SENS[order]
 

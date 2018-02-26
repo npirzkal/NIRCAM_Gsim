@@ -12,7 +12,7 @@ from .observations.observations \
         import observation as NIRCAM_Gsim_observation 
 
 class Grism_seed():
-	def __init__(self,image_seeds,cross_filter,mode,config_path="."):
+	def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False):
 		# image_seeds: "V4*.fits"
 		# mode: "modA_C" for module A and grismC
 		# cross_filter: "F444W"
@@ -34,15 +34,17 @@ class Grism_seed():
 
 		#print(self.xstart,self.xend,self.xend-self.xstart)
 
-		# Get segmenationation info, from the first image seed.
+		# Get segmentation info, from the first image seed.
 		self.seg_data = fits.open(image_seeds[0])[2].data
+
+		self.extrapolate_SED = extrapolate_SED
 
 	def observation(self,orders=["+1","+2"],max_split=100):
 		# order: dispersion order, e.g. "+1"
 		# max_split: we use max_split groups of pixels to disperse the whole image
 		self.this_one = {}
 		for order in orders:
-			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split)
+			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED)
 			self.this_one[order].disperse_all()
 
 	def finalize(self,tofits=None,Back=False):

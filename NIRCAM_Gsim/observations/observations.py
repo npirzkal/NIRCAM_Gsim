@@ -10,8 +10,8 @@ from ..disperse.disperse import dispersed_pixel
 
 
 def helper(vars):
-    x0s,y0s,f,order,C,ID = vars # in this case ID is dummy number
-    p = dispersed_pixel(x0s,y0s,f,order,C,ID)
+    x0s,y0s,f,order,C,ID,extrapolate_SED = vars # in this case ID is dummy number
+    p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED)
     xs, ys, areas, lams, counts,ID = p
     IDs = [ID] * len(xs)
 
@@ -21,7 +21,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -48,6 +48,10 @@ class observation():
         self.dims = np.shape(self.seg)
         self.order = order
         self.SED_file = SED_file
+
+        self.extrapolate_SED = extrapolate_SED # Allow for SED extrapolation
+        if self.extrapolate_SED:
+            print("Warning: SED Extrapolation turned on.")
 
         self.create_pixel_list()
         
@@ -128,7 +132,7 @@ class observation():
 
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-                pars.append([xs0,ys0,f,self.order,self.C,ID])
+                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
             h5f.close()
         #sys.exit(1)
         # test...
@@ -154,7 +158,7 @@ class observation():
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
                 lams = list(self.fs.keys())
                 f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
-                pars.append([xs0,ys0,f,self.order,self.C,ID])
+                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
 
         print(len(pars),"pixels loaded for dispersion...")
         
