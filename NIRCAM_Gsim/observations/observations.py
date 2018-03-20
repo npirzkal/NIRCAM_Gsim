@@ -91,7 +91,7 @@ class observation():
                 except:
                     print("WARNING: unable to find PHOTFLAM keyword in {}".format(dir_image))
                     sys.exit()
-                print("Loaded",dir_image, "wavelength:",l,"A")
+                print("Loaded",dir_image, "wavelength:",l,"micron")
             try:
                 d = fits.open(dir_image)[1].data
             except:
@@ -102,7 +102,19 @@ class observation():
             if self.SED_file==None:
                 self.fs[l] = d[self.ys,self.xs] * photflam
             else:
+                # Need to normalize the object stamps
+                IDs = set(np.ravel(self.seg))
+                
+                for ID in IDs:
+                    if ID==0: continue
+                    #print "ID:",ID
+                    vg = self.seg==ID
+                    sum_seg = np.sum(d[vg])
+                    if sum_seg!=0.:
+                        d[vg] = d[vg]/sum_seg
+                #print "we have:",len(IDs)
                 self.fs["SED"] = d[self.ys,self.xs]
+                #print "sum of this object:",np.sum(self.fs["SED"])
 
     def disperse_all(self):
         self.simulated_image = np.zeros(self.dims,np.float)
@@ -129,7 +141,6 @@ class observation():
                 lams = tmp[0]
                 fffs = tmp[1]*self.fs["SED"][c][i]
                 f = [lams,fffs]
-
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
