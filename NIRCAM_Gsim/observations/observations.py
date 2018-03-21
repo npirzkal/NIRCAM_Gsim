@@ -21,7 +21,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -43,11 +43,13 @@ class observation():
             x = np.arange(self.C.WMIN,self.C.WMAX,(self.C.WMAX,self.C.WMIN)/100.)
             plt.plot(x,self.C.SENS[order](x))
 
+        self.ID = ID
         self.dir_images = direct_images
         self.seg = segmentation_data
         self.dims = np.shape(self.seg)
         self.order = order
         self.SED_file = SED_file
+        self.max_cpu = max_cpu
 
         self.extrapolate_SED = extrapolate_SED # Allow for SED extrapolation
         if self.extrapolate_SED:
@@ -65,6 +67,10 @@ class observation():
         self.maxy = int(max(self.ys))
 
 
+        if max_split<0:
+            max_split = int(len(self.xs)/np.abs(max_split))+1
+            print("Will use",max_split,"chunks")
+
         print("Splitting in chunks of",max_split)
         self.xs = np.array_split(self.xs,max_split)
         self.ys = np.array_split(self.ys,max_split)
@@ -73,7 +79,13 @@ class observation():
 
     def create_pixel_list(self):
 
-        self.ys,self.xs = np.nonzero(self.seg)
+        if self.ID==0:
+            self.ys,self.xs = np.nonzero(self.seg)
+        else:
+            print "looking at",self.ID
+            vg = self.seg==self.ID
+            self.ys,self.xs = np.nonzero(vg)            
+            print self.ys,self.xs
 
         print(len(self.xs),"pixels to process")
         self.fs = {}
@@ -174,7 +186,7 @@ class observation():
         print(len(pars),"pixels loaded for dispersion...")
         
         time1 = time.time()
-        mypool = Pool(10) # Create pool
+        mypool = Pool(self.max_cpu) # Create pool
         all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
         mypool.close() # No more work
 

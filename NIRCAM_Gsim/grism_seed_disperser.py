@@ -12,7 +12,7 @@ from .observations.observations \
         import observation as NIRCAM_Gsim_observation 
 
 class Grism_seed():
-	def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM"):
+	def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=5):
 		# image_seeds: "V4*.fits"
 		# mode: "modA_C" for module A and grismC
 		# cross_filter: "F444W"
@@ -24,6 +24,7 @@ class Grism_seed():
 		self.cross_filter = cross_filter
 		self.mode = mode
 		self.config_path = config_path
+		self.max_cpu = max_cpu
 
 		# Get information about input padding. We use the first image seed for this, just like for the segmentation info.
 		h = fits.open(image_seeds[0])[0].header
@@ -40,9 +41,9 @@ class Grism_seed():
 		self.extrapolate_SED = extrapolate_SED
 		self.SED_file = SED_file
 
-	def observation(self,orders=["+1","+2"],max_split=100):
+	def observation(self,orders=["+1","+2"],max_split=-1000,ID=0):
 		# order: dispersion order, e.g. "+1"
-		# max_split: we use max_split groups of pixels to disperse the whole image
+		# max_split: we use max_split groups of pixels to disperse the whole image, -xx to keep them to some max xx number each
 		self.this_one = {}
 
 		# If orders are not passed, we get them from the config file
@@ -53,7 +54,7 @@ class Grism_seed():
 			orders = C.orders
 
 		for order in orders:
-			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file)
+			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID)
 			self.this_one[order].disperse_all()
 
 	def finalize(self,tofits=None,Back=False):

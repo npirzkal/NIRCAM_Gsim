@@ -34,7 +34,10 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
 
     dw = np.abs((wmax-wmin)/(dx1-dx0))
     
-    lambdas = np.arange(wmin,wmax+1,np.abs(dw/oversample_factor))
+    #lambdas = np.arange(wmin,wmax+1,np.abs(dw/oversample_factor))
+    dlam = np.abs(dw/oversample_factor)
+    lambdas = np.arange(wmin,wmax+dlam,dlam)
+
     dS = C.INVDISPL(order,x0,y0,lambdas)
 
     m = len(lambdas)
