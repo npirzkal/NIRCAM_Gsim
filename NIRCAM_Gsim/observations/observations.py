@@ -82,10 +82,10 @@ class observation():
         if self.ID==0:
             self.ys,self.xs = np.nonzero(self.seg)
         else:
-            print "looking at",self.ID
+            print("looking at",self.ID)
             vg = self.seg==self.ID
             self.ys,self.xs = np.nonzero(vg)            
-            print self.ys,self.xs
+            print(self.ys,self.xs)
 
         print(len(self.xs),"pixels to process")
         self.fs = {}
