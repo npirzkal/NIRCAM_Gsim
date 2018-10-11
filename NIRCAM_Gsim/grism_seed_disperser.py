@@ -50,7 +50,7 @@ class Grism_seed():
 		if orders==None:
 			import grismconf
 			C = grismconf.Config(self.config)
-			print "orders:",C.orders
+			print("orders:",C.orders)
 			orders = C.orders
 
 		for order in orders:
