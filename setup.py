@@ -10,7 +10,7 @@ def read(fname):
 
 setup(
 	name='NIRCAM_Gsim',
-	version='1.0',
+	version='1.1',
 	description='NIRCAM Grism simulator, includes J.D. Smith polyclip C code',
 	author='Nor Pirzkal',
 	author_email='npirzkal@mac.com',

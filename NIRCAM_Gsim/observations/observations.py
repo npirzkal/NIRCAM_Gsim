@@ -7,7 +7,7 @@ from astropy.table import Table
 #from NIRCAM_Gsim import polyclip
 #from NIRCAM_Gsim.disperse import *
 from ..disperse.disperse import dispersed_pixel
-
+import h5py
 
 def helper(vars):
     x0s,y0s,f,order,C,ID,extrapolate_SED = vars # in this case ID is dummy number
@@ -21,7 +21,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[]):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -29,6 +29,8 @@ class observation():
         order: The name of the spectral order to simulate, +1 or +2 for NIRCAM
         max_split: Number of chunks to compute instead of trying everything at once.
         SED_file: Name of HDF5 file containing datasets matching the ID in the segmentation file and each consisting of a [[lambda],[flux]] array.
+        SBE_save: If set to a path, HDF5 containing simulated stamps for all obsjects will be saved.
+        boundaries: a tuple containing the coordinates of the FOV within the larger seed image. Needs to be specified if SBE_save!=None
         """
 
         self.C = grismconf.Config(config)
@@ -49,7 +51,14 @@ class observation():
         self.dims = np.shape(self.seg)
         self.order = order
         self.SED_file = SED_file
+        self.SBE_save = SBE_save
         self.max_cpu = max_cpu
+
+        if SBE_save!=None:
+            if len(boundaries)!=4:
+                print("WARMING: boundaries needs to be specficied if using SBE_save")
+                sys.exit()
+            self.xstart,self.xend,self.ystart,self.yend = boundaries
 
         self.extrapolate_SED = extrapolate_SED # Allow for SED extrapolation
         if self.extrapolate_SED:
@@ -61,33 +70,28 @@ class observation():
         self.p_a = []
 
 
-        self.minx = int(min(self.xs))
-        self.maxx= int(max(self.xs))
-        self.miny = int(min(self.ys))
-        self.maxy = int(max(self.ys))
 
-
-        if max_split<0:
-            max_split = int(len(self.xs)/np.abs(max_split))+1
-            print("Will use",max_split,"chunks")
-
-        print("Splitting in chunks of",max_split)
-        self.xs = np.array_split(self.xs,max_split)
-        self.ys = np.array_split(self.ys,max_split)
-        for l in self.fs.keys():
-            self.fs[l] = np.array_split(self.fs[l],max_split)
-
+    #def create_pixel_list_by_ID(self):
     def create_pixel_list(self):
-
+        # Create a list of pixels to dispersed, grouped per object ID
         if self.ID==0:
-            self.ys,self.xs = np.nonzero(self.seg)
+            self.xs = []
+            self.ys = []
+            all_IDs = np.array(list(set(np.ravel(self.seg))))
+            all_IDs = all_IDs[all_IDs>0]
+            print("We have ",len(all_IDs),"Objects")
+            for ID in all_IDs:
+                ys,xs = np.nonzero(self.seg==ID)
+                self.xs.append(xs)
+                self.ys.append(ys)
+            self.IDs = all_IDs
         else:
-            print "looking at",self.ID
             vg = self.seg==self.ID
-            self.ys,self.xs = np.nonzero(vg)            
-            print self.ys,self.xs
+            ys,xs = np.nonzero(vg)            
+            self.xs.append(xs)
+            self.ys.append(ys)
+            self.IDs = [self.ID]
 
-        print(len(self.xs),"pixels to process")
         self.fs = {}
         for dir_image in self.dir_images:
             print("dir image:",dir_image)
@@ -109,32 +113,139 @@ class observation():
             except:
                 d = fits.open(dir_image)[0].data
 
+
             # If we do not use an SED file then we use photometry to get fluxes
             # Otherwise, we assume that objects are normalized to 1.
             if self.SED_file==None:
-                self.fs[l] = d[self.ys,self.xs] * photflam
+                self.fs[l] = []
+                for i in range(len(self.IDs)):
+                    self.fs[l].append(d[self.ys[i],self.xs[i]] * photflam)
             else:
-                # Need to normalize the object stamps
-                IDs = set(np.ravel(self.seg))
-                
-                for ID in IDs:
-                    if ID==0: continue
-                    #print "ID:",ID
+                # Need to normalize the object stamps              
+                for ID in self.IDs:
                     vg = self.seg==ID
                     sum_seg = np.sum(d[vg])
                     if sum_seg!=0.:
                         d[vg] = d[vg]/sum_seg
-                #print "we have:",len(IDs)
-                self.fs["SED"] = d[self.ys,self.xs]
-                #print "sum of this object:",np.sum(self.fs["SED"])
+
+                self.fs["SED"] = []
+                for i in range(len(self.IDs)):
+                    self.fs["SED"].append(d[self.ys[i],self.xs[i]])
+
+
+
+    # def create_pixel_listOLD(self):
+
+    #     if self.ID==0:
+    #         self.ys,self.xs = np.nonzero(self.seg)
+    #     else:
+    #         #print("looking at",self.ID)
+    #         vg = self.seg==self.ID
+    #         self.ys,self.xs = np.nonzero(vg)            
+    #         #print self.ys,self.xs
+
+    #     print(len(self.xs),"pixels to process")
+    #     self.fs = {}
+    #     for dir_image in self.dir_images:
+    #         print("dir image:",dir_image)
+    #         if self.SED_file==None:
+    #             try:
+    #                 l = fits.getval(dir_image,'PHOTPLAM') / 10000. # in Angsrrom and we want Micron now
+    #             except:
+    #                 print("WARNING: unable to find PHOTPLAM keyword in {}".format(dir_image))
+    #                 sys.exit()
+
+    #             try:
+    #                 photflam = fits.getval(dir_image,'photflam')
+    #             except:
+    #                 print("WARNING: unable to find PHOTFLAM keyword in {}".format(dir_image))
+    #                 sys.exit()
+    #             print("Loaded",dir_image, "wavelength:",l,"micron")
+    #         try:
+    #             d = fits.open(dir_image)[1].data
+    #         except:
+    #             d = fits.open(dir_image)[0].data
+
+    #         # If we do not use an SED file then we use photometry to get fluxes
+    #         # Otherwise, we assume that objects are normalized to 1.
+    #         if self.SED_file==None:
+    #             self.fs[l] = d[self.ys,self.xs] * photflam
+    #         else:
+    #             # Need to normalize the object stamps
+    #             IDs = set(np.ravel(self.seg))
+                
+    #             for ID in IDs:
+    #                 if ID==0: continue
+    #                 vg = self.seg==ID
+    #                 sum_seg = np.sum(d[vg])
+    #                 if sum_seg!=0.:
+    #                     d[vg] = d[vg]/sum_seg
+    #             #print "we have:",len(IDs)
+    #             self.fs["SED"] = d[self.ys,self.xs]
+    #             #print "sum of this object:",np.sum(self.fs["SED"])
 
     def disperse_all(self):
         self.simulated_image = np.zeros(self.dims,np.float)
-        for c in range(len(self.xs)):
-            print(c+1,"of",len(self.xs))
-            self.disperse_chunk(c)
-            #import nf
-            #nf.disp(self.simulated_image,2)
+
+        if self.SBE_save != None:
+            print("Outputing to ", self.SBE_save)
+
+            if os.path.isfile(self.SBE_save):
+                os.unlink(self.SBE_save)
+            fhdf5 = h5py.File(self.SBE_save,"w")
+
+        for i in range(len(self.IDs)):
+            print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
+            this_object = self.disperse_chunk(i)
+
+            if self.SBE_save != None:
+                # If SBE_save is enabled, we create an HDF5 file containing the stamp of this simulated object
+                # order is in self.order
+                # We just save the x,y,f,w arrays as well as info about minx,maxx,miny,maxy
+                
+
+                # We trim the stamp to avoid padding area
+                this_object =  this_object[self.ystart:self.yend+1,self.xstart:self.xend+1]
+                
+                yss,xss = np.nonzero(this_object>0)
+                
+                if len(xss)<1:
+                    continue 
+
+                minx = np.min(xss)
+                maxx = np.max(xss)
+                miny = np.min(yss)
+                maxy = np.max(yss)
+
+                print("======>",minx,maxx,miny,maxy)
+                this_object = this_object[miny:maxy+1,minx:maxx+1]
+
+
+
+
+                dset = fhdf5.create_dataset("%d_%s" % (self.IDs[i],self.order),data=this_object,dtype='f',compression="gzip",compression_opts=9)
+                dset.attrs[u'minx'] = minx
+                dset.attrs[u'maxx'] = maxx
+                dset.attrs[u'miny'] = miny
+                dset.attrs[u'maxy'] = maxy
+                dset.attrs[u'units'] = 'e-/s'
+
+                # dset = fhdf5.create_dataset('y',data=y,dtype='i',compression="gzip",compression_opts=9)
+                # dset.attrs[u'miny'] = np.min(y)
+                # dset.attrs[u'maxy'] = np.max(y)
+                # dset.attrs[u'units'] = 'pixel'
+
+
+                # dset = fhdf5.create_dataset('f',data=f,dtype='f',compression="gzip",compression_opts=9)
+                # dset.attrs[u'units'] = 'e/s'
+
+                # dset = fhdf5.create_dataset('w',data=w,dtype='f',compression="gzip",compression_opts=9)
+                # dset.attrs[u'units'] = 'micron'
+
+        if self.SBE_save != None:
+            fhdf5.close()
+
+
 
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
@@ -152,25 +263,12 @@ class observation():
                 tmp = h5f["%s" % (ID)][:]
                 lams = tmp[0]
                 fffs = tmp[1]*self.fs["SED"][c][i]
+                #print("should be <<1 ",self.fs["SED"][c][i],tmp[1])
                 f = [lams,fffs]
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
             h5f.close()
-        #sys.exit(1)
-        # test...
-        # def Gaussian1D(x,A,mu,sigma):
-        #     return A/(sigma*np.sqrt(2*np.pi)) * np.exp(-0.5*((x-mu)/sigma)**2)
-        # lams = np.arange(20000.,50000,5)
-        # fffs = Gaussian1D(lams,1e-17,35000,5)+Gaussian1D(lams,2e-17,37000,5)+Gaussian1D(lams,3e-17,36000,5)
-        # f = [lams,fffs]
-        # pars = []
-        # for i in range(len(self.xs[c])):
-        #     ID = i
-        #     xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
-        #     ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-        #     pars.append([xs0,ys0,f,self.order,self.C,ID])
-        #
 
         else:
         # good code below
@@ -194,36 +292,42 @@ class observation():
         #pbar = ProgressBar(widgets=widgets, maxval=len(pars)).start()
 
         #simulated_image = np.zeros(self.dims,np.float)
+        this_object = np.zeros(self.dims,np.float)
+
         for i,pp in enumerate(all_res, 1):        
             if np.shape(pp.transpose())==(1,6):
                 continue
             #print np.min(pp[0]),np.max(pp[0])
-            x,y,f = pp[0],pp[1],pp[4]
+            x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
             vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
 
             x = x[vg]
             y = y[vg]
             f = f[vg]
+            w = w[vg]
             
             if len(x)<1:
                 continue
 
             minx = int(min(x))
-            maxx= int(max(x))
+            maxx = int(max(x))
             miny = int(min(y))
             maxy = int(max(y))
 
             a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
             self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
-            
-            #if i % len(pars)/100:
-            #    pbar.update(i)
-        #pbar.finish()
+            this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
+
+
+
+
+
+
         time2 = time.time()
 
         print(time2-time1,"s.")
-        #return simulated_image
+        return this_object
 
     def show(self):
         import matplotlib.pyplot as plt

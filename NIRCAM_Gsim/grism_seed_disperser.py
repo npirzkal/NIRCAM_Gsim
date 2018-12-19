@@ -11,12 +11,14 @@ import numpy as np
 from .observations.observations \
         import observation as NIRCAM_Gsim_observation 
 
+
 class Grism_seed():
-	def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=5):
+	def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=5, SBE_save=None):
 		# image_seeds: "V4*.fits"
 		# mode: "modA_C" for module A and grismC
 		# cross_filter: "F444W"
 		# config_path: "/Users/GRISMDATA/NIRCAM/"
+		# SBE_save: None or path to output SBE info
 		config = os.path.join(config_path,"%s_%s_%s.conf" % (instrument,cross_filter,mode))
 		self.config = config
 		
@@ -25,6 +27,7 @@ class Grism_seed():
 		self.mode = mode
 		self.config_path = config_path
 		self.max_cpu = max_cpu
+		self.SBE_save = SBE_save
 
 		# Get information about input padding. We use the first image seed for this, just like for the segmentation info.
 		h = fits.open(image_seeds[0])[0].header
@@ -50,11 +53,11 @@ class Grism_seed():
 		if orders==None:
 			import grismconf
 			C = grismconf.Config(self.config)
-			print "orders:",C.orders
+			print("orders:",C.orders)
 			orders = C.orders
 
 		for order in orders:
-			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID)
+			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
 			self.this_one[order].disperse_all()
 
 	def finalize(self,tofits=None,Back=False):
