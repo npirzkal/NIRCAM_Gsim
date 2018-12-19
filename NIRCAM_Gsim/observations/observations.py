@@ -220,9 +220,6 @@ class observation():
                 print("======>",minx,maxx,miny,maxy)
                 this_object = this_object[miny:maxy+1,minx:maxx+1]
 
-
-
-
                 dset = fhdf5.create_dataset("%d_%s" % (self.IDs[i],self.order),data=this_object,dtype='f',compression="gzip",compression_opts=9)
                 dset.attrs[u'minx'] = minx
                 dset.attrs[u'maxx'] = maxx
@@ -230,17 +227,6 @@ class observation():
                 dset.attrs[u'maxy'] = maxy
                 dset.attrs[u'units'] = 'e-/s'
 
-                # dset = fhdf5.create_dataset('y',data=y,dtype='i',compression="gzip",compression_opts=9)
-                # dset.attrs[u'miny'] = np.min(y)
-                # dset.attrs[u'maxy'] = np.max(y)
-                # dset.attrs[u'units'] = 'pixel'
-
-
-                # dset = fhdf5.create_dataset('f',data=f,dtype='f',compression="gzip",compression_opts=9)
-                # dset.attrs[u'units'] = 'e/s'
-
-                # dset = fhdf5.create_dataset('w',data=w,dtype='f',compression="gzip",compression_opts=9)
-                # dset.attrs[u'units'] = 'micron'
 
         if self.SBE_save != None:
             fhdf5.close()
