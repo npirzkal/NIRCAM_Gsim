@@ -190,9 +190,9 @@ class observation():
         if self.SBE_save != None:
             print("Outputing to ", self.SBE_save)
 
-            if os.path.isfile(self.SBE_save):
-                os.unlink(self.SBE_save)
-            fhdf5 = h5py.File(self.SBE_save,"w")
+            #if os.path.isfile(self.SBE_save):
+            #    os.unlink(self.SBE_save)
+            fhdf5 = h5py.File(self.SBE_save,"a")
 
         for i in range(len(self.IDs)):
             print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
