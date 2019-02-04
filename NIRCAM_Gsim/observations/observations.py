@@ -244,9 +244,12 @@ class observation():
             h5f = h5py.File(self.SED_file,'r')
             # b = h5f['16524'][:]
             pars = []
+            ID = int(self.seg[self.ys[c][0],self.xs[c][0]])
+            #print(ID)
+            tmp = h5f["%s" % (ID)][:]
             for i in range(len(self.xs[c])):
-                ID = int(self.seg[self.ys[c][i],self.xs[c][i]])
-                tmp = h5f["%s" % (ID)][:]
+                #ID = int(self.seg[self.ys[c][i],self.xs[c][i]])
+                
                 lams = tmp[0]
                 fffs = tmp[1]*self.fs["SED"][c][i]
                 #print("should be <<1 ",self.fs["SED"][c][i],tmp[1])
