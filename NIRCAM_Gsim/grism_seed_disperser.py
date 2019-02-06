@@ -1,24 +1,19 @@
 #! /usr/bin env python
 
 """
-Code to generate NIRCAM dispersed seed images. Starting with a set of imaging seed images, 
-potentially with padding, given a NIRCAM GRISMCONF configuration file
+Code to generate WFSS dispersed seed images. Starting with a set of imaging seed images, 
+potentially with padding, given a JWST WFSS GRISMCONF configuration file
 """
 
 import os
 from astropy.io import fits
 import numpy as np
 from .observations.observations \
-        import observation as NIRCAM_Gsim_observation 
+        import observation as Gsim_observation 
 
 
 class Grism_seed():
 	def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=5, SBE_save=None):
-		# image_seeds: "V4*.fits"
-		# mode: "modA_C" for module A and grismC
-		# cross_filter: "F444W"
-		# config_path: "/Users/GRISMDATA/NIRCAM/"
-		# SBE_save: None or path to output SBE info
 		"""A class for a grism simulation
 
 		Attributes
@@ -98,7 +93,7 @@ class Grism_seed():
 			orders = C.orders
 
 		for order in orders:
-			self.this_one[order] = NIRCAM_Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
+			self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
 			self.this_one[order].disperse_all()
 
 	def finalize(self,tofits=None,Back=None,BackLevel=None):

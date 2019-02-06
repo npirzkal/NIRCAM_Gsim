@@ -4,12 +4,48 @@ from ..polyclip.polyclip import polyclip
 
 
 def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=False):
+    """This function take a list of pixels and disperses them using the information contained
+    in a GRISMCONF file, and returns a list of pixel and fluxes.
+
+    Parameters
+    ----------
+    x0s: list
+        A list of n x-coordinates.
+    y0s: list
+        A list of n y-coordinates.
+    f0: list
+        A list of n flux (flam) for each of the pixels contained in x0s,y0s.
+    order: str
+        The name of the spectral order to disperse.
+    ID: int
+        The ID of the object this is for.
+    oversample_factor: int
+        The amount of oversampling required above that of the natural dispersion. Default=2.
+    extrapolate_SEDL bol
+        Whether to allow for the SED of the object to be extrapolated when it does not fully cover the 
+        needed wavelength range. Default if False.
+
+    Output
+    ------
+    xs: array
+        A list of x-coordinates dispersed pixel
+    ys: array
+        A list of y-coordinates dispersed pixel
+    areas: array
+        A list of the areas of the incident pixel thatm when dispersed falls on the dispersed pixel
+    lams: array
+        A list of the wavelength of each of the dispersed pixels
+    counts: array
+        A list of counts for each of the dispersed pixels
+    ID: array
+        A list containing the ID. Returned for bookkeeping convenience.
+    """
+
     if extrapolate_SED==False:
         f = interp1d(f0[0],f0[1],fill_value=0.,bounds_error=False)
     else:
         f = interp1d(f0[0],f0[1],fill_value="extrapolate",bounds_error=False)
 
-    #s = interp1d(sens[order][0],sens[order][1],fill_value=0,bounds_error=False)
     s = C.SENS[order]
 
     x0 = np.mean(x0s)
@@ -20,8 +56,6 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
     
     # Figuring out a few things about size of order, dispersion and wavelengths to use
     
-    #wmin = C.DISPL(order,x0,y0,0.)
-    #wmax = C.DISPL(order,x0,y0,1.)
     
     wmin = C.WRANGE[order][0]
     wmax = C.WRANGE[order][1]
