@@ -96,25 +96,26 @@ class Grism_seed():
 			self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
 			#self.this_one[order].disperse_all()
 
-	def disperse(self,orders=None,cached=False,trans=None):
+	def disperse(self,orders=None,cache=False,trans=None):
 		"""Run the disperser. 
 
 		Parameters
 		----------
 		orders: list
 			Optional list containing the name of the orders to disperse
-		cached: bool
+		cache: bool
 			If set to True, the dispersion tables are cached and will be used on subsequent calls. 
 		"""
 		if orders==None:
 			orders = self.orders
+
 		print("Dispersing orders ", orders)
 		for order in orders:
 			print("Dispersing order ",order)
-			if self.this_one[order].cached:
+			if self.this_one[order].cache:
 				self.this_one[order].disperse_all_from_cache(trans=trans)
 			else:
-				self.this_one[order].disperse_all(cached=cached)
+				self.this_one[order].disperse_all(cache=cache)
 
 
 	def finalize(self,tofits=None,Back=None,BackLevel=None):

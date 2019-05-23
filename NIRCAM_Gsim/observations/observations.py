@@ -56,7 +56,7 @@ class observation():
         self.SED_file = SED_file
         self.SBE_save = SBE_save
         self.max_cpu = max_cpu
-        self.cached = False
+        self.cache = False
 
         if SBE_save!=None:
             if len(boundaries)!=4:
@@ -188,11 +188,11 @@ class observation():
     #             self.fs["SED"] = d[self.ys,self.xs]
     #             #print "sum of this object:",np.sum(self.fs["SED"])
 
-    def disperse_all(self,cached=False):
+    def disperse_all(self,cache=False):
 
-        if cached:
+        if cache:
             print("Object caching ON")
-            self.cached = True
+            self.cache = True
             self.cached_object = {}
             # self.cached_object2 = {}
 
@@ -208,7 +208,7 @@ class observation():
         for i in range(len(self.IDs)):
             print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
 
-            if self.cached:
+            if self.cache:
                 self.cached_object[i] = {}
                 self.cached_object[i]['x'] = []
                 self.cached_object[i]['y'] = []
@@ -300,7 +300,7 @@ class observation():
                 f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
 
-        if self.cached:
+        if self.cache:
             print(len(pars),"pixels loaded for dispersion and caching this object...")
         else:
             print(len(pars),"pixels loaded for dispersion...")
@@ -346,7 +346,7 @@ class observation():
             self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
             this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
 
-            if self.cached:
+            if self.cache:
                 #print("Caching it")
                 self.cached_object[c]['x'].append(x)
                 self.cached_object[c]['y'].append(y)
@@ -365,7 +365,7 @@ class observation():
         return this_object
 
     def disperse_all_from_cache(self,trans=None):
-        if not self.cached:
+        if not self.cache:
             print("No cached object stored.")
             return
 
@@ -381,7 +381,7 @@ class observation():
         
         import time
 
-        if not self.cached:
+        if not self.cache:
             print("No cached object stored.")
             return
 
