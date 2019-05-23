@@ -94,7 +94,7 @@ class Grism_seed():
 
 		for order in orders:
 			self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
-			self.this_one[order].disperse_all()
+			#self.this_one[order].disperse_all()
 
 	def finalize(self,tofits=None,Back=None,BackLevel=None):
 		""" Produces a 2D dispersed image and add the appropriate background

@@ -9,6 +9,9 @@ from astropy.table import Table
 from ..disperse.disperse import dispersed_pixel
 import h5py
 
+def comprehension_flatten( aList ):
+        return list(y for x in aList for y in x)
+
 def helper(vars):
     x0s,y0s,f,order,C,ID,extrapolate_SED = vars # in this case ID is dummy number
     p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED)
@@ -53,6 +56,7 @@ class observation():
         self.SED_file = SED_file
         self.SBE_save = SBE_save
         self.max_cpu = max_cpu
+        self.cached = False
 
         if SBE_save!=None:
             if len(boundaries)!=4:
@@ -184,19 +188,45 @@ class observation():
     #             self.fs["SED"] = d[self.ys,self.xs]
     #             #print "sum of this object:",np.sum(self.fs["SED"])
 
-    def disperse_all(self):
+    def disperse_all(self,cached=False):
+
+        if cached:
+            print("Object caching ON")
+            self.cached = True
+            self.cached_object = {}
+            # self.cached_object2 = {}
+
         self.simulated_image = np.zeros(self.dims,np.float)
 
         if self.SBE_save != None:
             print("Outputing to ", self.SBE_save)
 
-            #if os.path.isfile(self.SBE_save):
-            #    os.unlink(self.SBE_save)
+            if os.path.isfile(self.SBE_save):
+                os.unlink(self.SBE_save)
             fhdf5 = h5py.File(self.SBE_save,"a")
 
         for i in range(len(self.IDs)):
             print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
+
+            if self.cached:
+                self.cached_object[i] = {}
+                self.cached_object[i]['x'] = []
+                self.cached_object[i]['y'] = []
+                self.cached_object[i]['f'] = []
+                self.cached_object[i]['w'] = []
+                self.cached_object[i]['minx'] = []
+                self.cached_object[i]['maxx'] = []
+                self.cached_object[i]['miny'] = []
+                self.cached_object[i]['maxy'] = []
+
             this_object = self.disperse_chunk(i)
+
+            # if cached:
+            #     self.cached_object2[i] = {}
+            #     self.cached_object2[i]['x'] = comprehension_flatten(self.cached_object[i]['x'])
+            #     self.cached_object2[i]['y'] = comprehension_flatten(self.cached_object[i]['y'])
+            #     self.cached_object2[i]['f'] = comprehension_flatten(self.cached_object[i]['f'])
+            #     self.cached_object2[i]['w'] = comprehension_flatten(self.cached_object[i]['w'])
 
             if self.SBE_save != None:
                 # If SBE_save is enabled, we create an HDF5 file containing the stamp of this simulated object
@@ -270,8 +300,11 @@ class observation():
                 f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
 
-        print(len(pars),"pixels loaded for dispersion...")
-        
+        if self.cached:
+            print(len(pars),"pixels loaded for dispersion and caching this object...")
+        else:
+            print(len(pars),"pixels loaded for dispersion...")
+
         time1 = time.time()
         mypool = Pool(self.max_cpu) # Create pool
         all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
@@ -283,10 +316,14 @@ class observation():
         #simulated_image = np.zeros(self.dims,np.float)
         this_object = np.zeros(self.dims,np.float)
 
-        for i,pp in enumerate(all_res, 1):        
+        
+        
+
+        for i,pp in enumerate(all_res, 1): 
+
             if np.shape(pp.transpose())==(1,6):
                 continue
-            #print np.min(pp[0]),np.max(pp[0])
+
             x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
             vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
@@ -299,19 +336,86 @@ class observation():
             if len(x)<1:
                 continue
 
+            
+
             minx = int(min(x))
             maxx = int(max(x))
             miny = int(min(y))
             maxy = int(max(y))
-
             a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
             self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
             this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
 
+            if self.cached:
+                #print("Caching it")
+                self.cached_object[c]['x'].append(x)
+                self.cached_object[c]['y'].append(y)
+                self.cached_object[c]['f'].append(f)
+                self.cached_object[c]['w'].append(w)
+                self.cached_object[c]['minx'].append(minx)
+                self.cached_object[c]['maxx'].append(maxx)
+                self.cached_object[c]['miny'].append(miny)
+                self.cached_object[c]['maxy'].append(maxy)
 
 
 
+        time2 = time.time()
 
+        print("Dispersion took:",time2-time1,"s.")
+        return this_object
+
+    def disperse_all_from_cache(self,trans=None):
+        if not self.cached:
+            print("No cached object stored.")
+            return
+
+        self.simulated_image = np.zeros(self.dims,np.float)
+
+        for i in range(len(self.IDs)):
+            print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i],"from cached version")
+
+            this_object = self.disperse_chunk_from_cache(i,trans=trans)
+
+
+    def disperse_chunk_from_cache(self,c,trans=None):
+        """Method that handles the dispersion. To be called after create_pixel_list()"""
+        
+        import time
+
+        if not self.cached:
+            print("No cached object stored.")
+            return
+
+        time1 = time.time()
+        
+        this_object = np.zeros(self.dims,np.float)
+
+        # x = self.cached_object2[c]['x']
+        # y = self.cached_object2[c]['y']
+        # f = self.cached_object2[c]['f']
+        # w = self.cached_object2[c]['w']
+
+        # a = sparse.coo_matrix((f, (y, x)), shape=self.dims).toarray()
+        # self.simulated_image += a
+        # this_object +=  a
+
+        for i in range(len(self.cached_object[c]['x'])): 
+            x = self.cached_object[c]['x'][i]
+            y = self.cached_object[c]['y'][i]
+            f = self.cached_object[c]['f'][i]
+            w = self.cached_object[c]['w'][i]
+
+            if trans!=None:
+                f *= trans(w)
+
+            minx = self.cached_object[c]['minx'][i]
+            maxx = self.cached_object[c]['maxx'][i]
+            miny = self.cached_object[c]['miny'][i]
+            maxy = self.cached_object[c]['maxy'][i]
+   
+            a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+            self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
+            this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
 
         time2 = time.time()
 
