@@ -90,11 +90,32 @@ class Grism_seed():
 			import grismconf
 			C = grismconf.Config(self.config)
 			print("orders:",C.orders)
-			orders = C.orders
+			self.orders = C.orders
 
-		for order in orders:
+		for order in self.orders:
 			self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
 			#self.this_one[order].disperse_all()
+
+	def disperse(self,orders=None,cached=False):
+		"""Run the disperser. 
+
+		Parameters
+		----------
+		orders: list
+			Optional list containing the name of the orders to disperse
+		cached: bool
+			If set to True, the dispersion tables are cached and will be used on subsequent calls
+		"""
+		if orders==None:
+			orders = self.orders
+		print("Dispersing orders ", orders)
+		for order in orders:
+			print("Dispersing order ",order)
+			if self.this_one[order].cached:
+				self.this_one[order].disperse_all_from_cache()
+			else:
+				self.this_one[order].disperse_all(cached=cached)
+
 
 	def finalize(self,tofits=None,Back=None,BackLevel=None):
 		""" Produces a 2D dispersed image and add the appropriate background
@@ -115,9 +136,13 @@ class Grism_seed():
 				final = final/np.max(final)*BackLevel
 		else:
 			final = 0.
-		for order in self.this_one.keys():
-			print(order)
-			sim = self.this_one[order].simulated_image[self.ystart:self.yend+1,self.xstart:self.xend+1]
+		for order in self.orders:
+			print("Adding contribution from order ",order)
+			try:
+				sim = self.this_one[order].simulated_image[self.ystart:self.yend+1,self.xstart:self.xend+1]
+			except AttributeError:
+				print("Contribution from order",order,"is missing. Skipping it.")
+				continue
 			final = final + sim
 		self.final = final	
 		if tofits!=None:
