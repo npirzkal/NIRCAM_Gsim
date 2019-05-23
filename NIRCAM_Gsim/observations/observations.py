@@ -373,7 +373,6 @@ class observation():
 
         for i in range(len(self.IDs)):
             print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i],"from cached version")
-
             this_object = self.disperse_chunk_from_cache(i,trans=trans)
 
 
@@ -398,11 +397,12 @@ class observation():
         # a = sparse.coo_matrix((f, (y, x)), shape=self.dims).toarray()
         # self.simulated_image += a
         # this_object +=  a
-
+        if trans!=None:
+                print("Applying a transmission function...")
         for i in range(len(self.cached_object[c]['x'])): 
             x = self.cached_object[c]['x'][i]
             y = self.cached_object[c]['y'][i]
-            f = self.cached_object[c]['f'][i]
+            f = self.cached_object[c]['f'][i]*1.
             w = self.cached_object[c]['w'][i]
 
             if trans!=None:
