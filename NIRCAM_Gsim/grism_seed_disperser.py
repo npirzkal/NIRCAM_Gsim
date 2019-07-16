@@ -91,7 +91,9 @@ class Grism_seed():
 			C = grismconf.Config(self.config)
 			print("orders:",C.orders)
 			self.orders = C.orders
-
+		else:
+			self.order = orders
+			
 		for order in self.orders:
 			self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
 			#self.this_one[order].disperse_all()

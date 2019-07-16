@@ -235,9 +235,9 @@ class observation():
                 
 
                 # We trim the stamp to avoid padding area
-                this_object =  this_object[self.ystart:self.yend+1,self.xstart:self.xend+1]
+                this_SBE_object =  this_object[self.ystart:self.yend+1,self.xstart:self.xend+1]
                 
-                yss,xss = np.nonzero(this_object>0)
+                yss,xss = np.nonzero(this_SBE_object>0)
                 
                 if len(xss)<1:
                     continue 
@@ -248,9 +248,9 @@ class observation():
                 maxy = np.max(yss)
 
                 print("======>",minx,maxx,miny,maxy)
-                this_object = this_object[miny:maxy+1,minx:maxx+1]
+                this_SBE_object = this_SBE_object[miny:maxy+1,minx:maxx+1]
 
-                dset = fhdf5.create_dataset("%d_%s" % (self.IDs[i],self.order),data=this_object,dtype='f',compression="gzip",compression_opts=9)
+                dset = fhdf5.create_dataset("%d_%s" % (self.IDs[i],self.order),data=this_SBE_object,dtype='f',compression="gzip",compression_opts=9)
                 dset.attrs[u'minx'] = minx
                 dset.attrs[u'maxx'] = maxx
                 dset.attrs[u'miny'] = miny
