@@ -119,6 +119,28 @@ class Grism_seed():
 			else:
 				self.this_one[order].disperse_all(cache=cache)
 
+	def disperse_background_1D(self,background):
+		"""Produces a dispersed 2D image of the background spectrum contained in the fits file background, meant to be the 
+		output of thr jwst_background module. This background is dispersed either in the row or column direction, depending on the 
+		dispersion, and the result is tiled to produce a full 2D image. All orders are generated and added up.
+
+		Parameters
+		----------
+		background: str
+			Name of the fits file containing the background spectrum. Data should be in the first extension and in a fits table.
+			The wavelength (micron) in "wavelength" and the flux (in Mjy/sr) in "background", similarly to what is produced by 
+			the jwst_background package
+
+		output: numpy 2D array
+			A 2D array containing the model background which can be fed back into finalize()
+		"""
+
+
+		bck = 0.
+		for order in self.orders:
+			print("Computing dispersed backgroung for order ",order,"and spectrum from",background)
+			bck += self.this_one[order].disperse_background_1D(background)
+		return bck
 
 	def finalize(self,tofits=None,Back=None,BackLevel=None):
 		""" Produces a 2D dispersed image and add the appropriate background
@@ -133,8 +155,11 @@ class Grism_seed():
 			Renormalization factor for the background image. Renormalization is done by multiplying by BackLevel/np.max(Back)
 		"""
 
-		if Back!=None:
-			final = fits.open(os.path.join(self.config_path,Back))[0].data
+		if Back is not None:
+			if type(Back)==np.ndarray:
+				final = Back
+			else:
+				final = fits.open(os.path.join(self.config_path,Back))[0].data
 			if BackLevel!=None:
 				final = final/np.max(final)*BackLevel
 		else:

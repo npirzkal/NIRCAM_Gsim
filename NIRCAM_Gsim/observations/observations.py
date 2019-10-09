@@ -261,7 +261,95 @@ class observation():
         if self.SBE_save != None:
             fhdf5.close()
 
+    def disperse_background_1D(self,background):
+        """Method to create a simple disperse background, obtained by dispersing a full row or column.
+        We assume very little field dependence and create a full 2D image by tiling a single dispersed row or column"""
 
+        # Create a fake object, line in middle of detector
+        naxis = self.C.NAXIS
+        C = self.C
+        xpos,ypos = naxis[0]//2,naxis[1]//2
+
+        # Find out if this an x-direction or y-direction dispersion
+        dydx = np.array(C.DISPXY(self.order,1000,1000,1))-np.array(C.DISPXY(self.order,1000,1000,0))
+        if np.abs(dydx[0])>np.abs(dydx[1]):
+            print("disperse_background_1D: x-direction")
+            direction = "x"
+            xs = np.arange(self.C.XRANGE[self.order][0]+0,self.C.XRANGE[self.order][1]+naxis[0])
+            ys = np.zeros(np.shape(xs))+ypos
+        else:
+            print("disperse_background_1D: y-direction")
+            direction = "y"
+            ys = np.arange(self.C.YRANGE[self.order][0]+0,self.C.YRANGE[self.order][1]+naxis[0])
+            xs = np.zeros(np.shape(ys))+xpos
+
+        print(xpos,ypos)
+        
+        with fits.open(background) as fin:
+            lam = fin[1].data.field("wavelength")
+            fnu = fin[1].data.field("background")
+
+        fnu = fnu/4.25e10 # MJy/arcsec^2
+        fnu = fnu*1e6 # Jy/arcsec^2
+        fnu = fnu * (0.065**2) # Jy/pixel
+
+        fnu = fnu*1e-23
+        c = 299792458.* 1e10 # A
+        wa = lam*10000
+        flam = fnu/(wa**2/c)
+
+        f = [lam,flam]
+                
+        pars = []        
+        for i in range(len(xs)):
+            ID = 1
+            xs0 = [xs[i],xs[i]+1,xs[i]+1,xs[i]]
+            ys0 = [ys[i],ys[i],ys[i]+1,ys[i]+1]
+            pars.append([xs0,ys0,f,self.order,C,ID,False])
+            
+
+        from multiprocessing import Pool
+        import time
+        time1 = time.time()
+        mypool = Pool(self.max_cpu) # Create pool
+        all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
+        mypool.close()
+
+        bck = np.zeros(naxis,np.float)
+        import tqdm
+        for i,pp in tqdm.tqdm(enumerate(all_res, 1)): 
+            if np.shape(pp.transpose())==(1,6):
+                continue
+            x,y,w,f = pp[0],pp[1],pp[3],pp[4]
+
+
+            vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1]) 
+
+            x = x[vg]
+            y = y[vg]
+            f = f[vg]
+            w = w[vg]
+            
+            if len(x)<1:
+                continue
+
+            
+
+            minx = int(min(x))
+            maxx = int(max(x))
+            miny = int(min(y))
+            maxy = int(max(y))
+            a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+            bck[miny:maxy+1,minx:maxx+1] = bck[miny:maxy+1,minx:maxx+1] + a
+
+        if direction=="x":
+            bck = np.sum(bck,axis=0)
+            bck = np.tile(bck,[naxis[1],1])
+        else:
+            bck = np.sum(bck,axis=1)
+            bck = np.tile(bck,[naxis[0],1]).transpose()
+
+        return bck
 
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
