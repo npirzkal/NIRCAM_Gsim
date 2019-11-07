@@ -60,7 +60,7 @@ class observation():
 
         if SBE_save!=None:
             if len(boundaries)!=4:
-                print("WARMING: boundaries needs to be specficied if using SBE_save")
+                print("WARMING: boundaries needs to be specified if using SBE_save")
                 sys.exit()
             self.xstart,self.xend,self.ystart,self.yend = boundaries
 
@@ -200,9 +200,6 @@ class observation():
 
         if self.SBE_save != None:
             print("Outputing to ", self.SBE_save)
-
-            if os.path.isfile(self.SBE_save):
-                os.unlink(self.SBE_save)
             fhdf5 = h5py.File(self.SBE_save,"a")
 
         for i in range(len(self.IDs)):
@@ -263,7 +260,7 @@ class observation():
 
     def disperse_background_1D(self,background):
         """Method to create a simple disperse background, obtained by dispersing a full row or column.
-        We assume very little field dependence and create a full 2D image by tiling a single dispersed row or column"""
+        We assume no field dependence in the cross dispersion direction and create a full 2D image by tiling a single dispersed row or column"""
 
         # Create a fake object, line in middle of detector
         naxis = self.C.NAXIS
@@ -285,9 +282,9 @@ class observation():
 
         print(xpos,ypos)
         
-        with fits.open(background) as fin:
-            lam = fin[1].data.field("wavelength")
-            fnu = fin[1].data.field("background")
+        
+        lam = background[0]
+        fnu = background[1]
 
         fnu = fnu/4.25e10 # MJy/arcsec^2
         fnu = fnu*1e6 # Jy/arcsec^2
