@@ -20,4 +20,7 @@ setup(
         'NIRCAM_Gsim.observations': 'NIRCAM_Gsim/observations'},
     packages=["NIRCAM_Gsim","NIRCAM_Gsim.polyclip","NIRCAM_Gsim.observations","NIRCAM_Gsim.disperse"],
     ext_modules=[Extension('NIRCAM_Gsim.polyclip.polyclip_c', ['NIRCAM_Gsim/polyclip/polyclip_c.c'])],
+    install_requires=[
+    "tqdm > 4.0.0",
+],
 )
