@@ -146,6 +146,8 @@ class Grism_seed():
         for order in self.orders:
             print("Computing dispersed background for order ",order)
             bck += self.this_one[order].disperse_background_1D(background)[self.ystart:self.yend+1,self.xstart:self.xend+1]
+
+        fits.writeto("WFSS_background.fits",bck)
         return bck
 
     def finalize(self,tofits=None,Back=None,BackLevel=None):

@@ -8,6 +8,7 @@ from astropy.table import Table
 #from NIRCAM_Gsim.disperse import *
 from ..disperse.disperse import dispersed_pixel
 import h5py
+import tqdm
 
 def comprehension_flatten( aList ):
         return list(y for x in aList for y in x)
@@ -188,7 +189,7 @@ class observation():
     #             self.fs["SED"] = d[self.ys,self.xs]
     #             #print "sum of this object:",np.sum(self.fs["SED"])
 
-    def disperse_all(self,cache=False):
+   def disperse_all(self,cache=False):
 
         if cache:
             print("Object caching ON")
@@ -198,9 +199,12 @@ class observation():
 
         self.simulated_image = np.zeros(self.dims,np.float)
 
-        if self.SBE_save != None:
-            print("Outputing to ", self.SBE_save)
-            fhdf5 = h5py.File(self.SBE_save,"a")
+        # if self.SBE_save != None:
+        #     print("Outputing to ", self.SBE_save)
+        #     if os.path.isfile(self.SBE_save):
+        #         fhdf5 = h5py.File(self.SBE_save,"r+")    
+        #     else:
+        #         fhdf5 = h5py.File(self.SBE_save,"w")
 
         for i in range(len(self.IDs)):
             print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
@@ -247,16 +251,22 @@ class observation():
                 print("======>",minx,maxx,miny,maxy)
                 this_SBE_object = this_SBE_object[miny:maxy+1,minx:maxx+1]
 
-                dset = fhdf5.create_dataset("%d_%s" % (self.IDs[i],self.order),data=this_SBE_object,dtype='f',compression="gzip",compression_opts=9)
-                dset.attrs[u'minx'] = minx
-                dset.attrs[u'maxx'] = maxx
-                dset.attrs[u'miny'] = miny
-                dset.attrs[u'maxy'] = maxy
-                dset.attrs[u'units'] = 'e-/s'
+                if os.path.isfile(self.SBE_save):
+                    mode = "a"
+                else:
+                    mode = "w"
+
+                with h5py.File(self.SBE_save,mode) as fhdf5:
+                    dset = fhdf5.create_dataset("%d_%s" % (self.IDs[i],self.order),data=this_SBE_object,dtype='f',compression="gzip",compression_opts=9)
+                    dset.attrs[u'minx'] = minx
+                    dset.attrs[u'maxx'] = maxx
+                    dset.attrs[u'miny'] = miny
+                    dset.attrs[u'maxy'] = maxy
+                    dset.attrs[u'units'] = 'e-/s'
 
 
-        if self.SBE_save != None:
-            fhdf5.close()
+        # if self.SBE_save != None:
+        #     fhdf5.close()
 
     def disperse_background_1D(self,background):
         """Method to create a simple disperse background, obtained by dispersing a full row or column.
@@ -313,8 +323,7 @@ class observation():
         mypool.close()
 
         bck = np.zeros(naxis,np.float)
-        import tqdm
-        for i,pp in tqdm.tqdm(enumerate(all_res, 1)): 
+        for i,pp in enumerate(all_res, 1): 
             if np.shape(pp.transpose())==(1,6):
                 continue
             x,y,w,f = pp[0],pp[1],pp[3],pp[4]
@@ -385,10 +394,10 @@ class observation():
                 f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
 
-        if self.cache:
-            print(len(pars),"pixels loaded for dispersion and caching this object...")
-        else:
-            print(len(pars),"pixels loaded for dispersion...")
+        # if self.cache:
+        #     print(len(pars),"pixels loaded for dispersion and caching this object...")
+        # else:
+        #     print(len(pars),"pixels loaded for dispersion...")
 
         time1 = time.time()
         mypool = Pool(self.max_cpu) # Create pool
@@ -446,7 +455,7 @@ class observation():
 
         time2 = time.time()
 
-        print("Dispersion took:",time2-time1,"s.")
+        # print("Dispersion took:",time2-time1,"s.")
         return this_object
 
     def disperse_all_from_cache(self,trans=None):
@@ -456,8 +465,8 @@ class observation():
 
         self.simulated_image = np.zeros(self.dims,np.float)
 
-        for i in range(len(self.IDs)):
-            print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i],"from cached version")
+        for i in tqdm.tqdm(range(len(self.IDs)),desc="Dispersing from cache"):
+            #print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i],"from cached version")
             this_object = self.disperse_chunk_from_cache(i,trans=trans)
 
 
