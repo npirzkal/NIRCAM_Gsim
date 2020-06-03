@@ -3,7 +3,7 @@ import numpy as np
 from ..polyclip.polyclip import polyclip
 
 
-def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=False):
+def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=False,xoffset=0,yoffset=0):
     """This function take a list of pixels and disperses them using the information contained
     in a GRISMCONF file, and returns a list of pixel and fluxes.
 
@@ -20,10 +20,15 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
     ID: int
         The ID of the object this is for.
     oversample_factor: int
-        The amount of oversampling required above that of the natural dispersion. Default=2.
+        The amount of oversampling required above that of the input spectra or natural dispersion, whichever is smaller. Default=2.
     extrapolate_SEDL bol
         Whether to allow for the SED of the object to be extrapolated when it does not fully cover the 
         needed wavelength range. Default if False.
+    xoffset int
+        A pixel offset to apply when computing the dispersion (for padded images for example)
+    yoffset int
+        A pixel offset to apply when computing the dispersion (for padded images for example)
+
 
     Output
     ------
@@ -60,24 +65,31 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
     wmin = C.WRANGE[order][0]
     wmax = C.WRANGE[order][1]
 
-    t0 = C.INVDISPL(order,x0,y0,wmin)
-    t1 = C.INVDISPL(order,x0,y0,wmax)
+    t0 = C.INVDISPL(order,x0+xoffset,y0+yoffset,wmin)
+    t1 = C.INVDISPL(order,x0+xoffset,y0+yoffset,wmax)
     
-    dx0 = C.DISPX(order,x0,y0,t0) - C.DISPX(order,x0,y0,t1)
-    dx1 = C.DISPY(order,x0,y0,t0) - C.DISPY(order,x0,y0,t1)
+    dx0 = C.DISPX(order,x0+xoffset,y0+yoffset,t0) - C.DISPX(order,x0+xoffset,y0+yoffset,t1)
+    dx1 = C.DISPY(order,x0+xoffset,y0+yoffset,t0) - C.DISPY(order,x0+xoffset,y0+yoffset,t1)
 
     dw = np.abs((wmax-wmin)/(dx1-dx0))
+
+    # Use a natural wavelength scale or the wavelength scale of the input SED/spectrum, whichever is smaller, divided by oversampling requested
+    input_dlam = np.median(f0[0][1:]-f0[0][:-1])
+    if input_dlam<dw:
+        dlam = input_dlam/oversample_factor
+    else:
+        dlam = dw/oversample_factor
     
-    #lambdas = np.arange(wmin,wmax+1,np.abs(dw/oversample_factor))
-    dlam = np.abs(dw/oversample_factor)
+    #dlam = dw/oversample_factor
+    #print("dw,oversample_factor,dlam:",dw,oversample_factor,dlam)
     lambdas = np.arange(wmin,wmax+dlam,dlam)
 
-    dS = C.INVDISPL(order,x0,y0,lambdas)
+    dS = C.INVDISPL(order,x0+xoffset,y0+yoffset,lambdas)
 
     m = len(lambdas)
 
-    dXs = C.DISPX(order,x0,y0,dS)
-    dYs = C.DISPY(order,x0,y0,dS)
+    dXs = C.DISPX(order,x0+xoffset,y0+yoffset,dS)
+    dYs = C.DISPY(order,x0+xoffset,y0+yoffset,dS)
 
     x0s = x0 + dXs 
     y0s = y0 + dYs 
@@ -113,8 +125,9 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
     ys  = y[0:nclip_poly[0]]
     areas = areas[0:nclip_poly[0]]
     lams = np.take(lambdas,index)[0:len(xs)]
-    counts = f(lams)*areas*s(lams)*np.abs(dw)/oversample_factor * 10000. # factor of 10000 because dw is in micron and we want Angstrom with to apply f(lams)
-
+#    counts = f(lams)*areas*s(lams)*np.abs(dw)/oversample_factor * 10000. # factor of 10000 because dw is in micron and we want Angstrom with to apply f(lams)
+    counts = f(lams)*areas*s(lams)*np.abs(dlam) * 10000. # factor of 10000 because dlam is in micron and we want Angstrom with to apply f(lams)
+    #print("dlams:",np.abs(dlam))
     vg = (xs>=0) & (ys>=0)
 
     if len(xs[vg])==0:

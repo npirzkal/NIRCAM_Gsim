@@ -14,8 +14,8 @@ def comprehension_flatten( aList ):
         return list(y for x in aList for y in x)
 
 def helper(vars):
-    x0s,y0s,f,order,C,ID,extrapolate_SED = vars # in this case ID is dummy number
-    p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED)
+    x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset = vars # in this case ID is dummy number
+    p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset)
     xs, ys, areas, lams, counts,ID = p
     IDs = [ID] * len(xs)
 
@@ -59,6 +59,11 @@ class observation():
         self.max_cpu = max_cpu
         self.cache = False
 
+        self.xstart = 0
+        self.xend = self.C.NAXIS[0]-1
+        self.ystart = 0
+        self.yend = self.C.NAXIS[1]-1
+
         if SBE_save!=None:
             if len(boundaries)!=4:
                 print("WARMING: boundaries needs to be specified if using SBE_save")
@@ -69,12 +74,28 @@ class observation():
         if self.extrapolate_SED:
             print("Warning: SED Extrapolation turned on.")
 
+        self.apply_POM()
         self.create_pixel_list()
         
         self.p_l = []
         self.p_a = []
 
 
+    def apply_POM(self):
+        """Account for the finite size of the POM and remove pixels in segmentation files which should not
+        be dispersed"""
+        x0 = int(self.xstart+self.C.XRANGE[self.C.orders[0]][0] + 0.5)
+        x1 = int(self.xend+self.C.XRANGE[self.C.orders[0]][1] + 0.5)
+        y0 = int(self.ystart+self.C.YRANGE[self.C.orders[0]][0] + 0.5)
+        y1 = int(self.yend+self.C.YRANGE[self.C.orders[0]][1] + 0.5)
+        from astropy.io import fits
+        print("POM footprint applied:",x0,x1,y0,y1)
+        #fits.writeto("org_seg.fits",self.seg,overwrite=True)
+        self.seg[:,:x0+1] = 0
+        self.seg[:,x1:] = 0
+        self.seg[:y0+1,:] = 0
+        self.seg[:,y1:] = 0
+        #fits.writeto("new_seg.fits",self.seg,overwrite=True)
 
     #def create_pixel_list_by_ID(self):
     def create_pixel_list(self):
@@ -87,15 +108,28 @@ class observation():
             print("We have ",len(all_IDs),"Objects")
             for ID in all_IDs:
                 ys,xs = np.nonzero(self.seg==ID)
-                self.xs.append(xs)
-                self.ys.append(ys)
-            self.IDs = all_IDs
+
+                # Truncate for POM
+                #ok = (xs>=self.xstart+C.XRANGE[C.orders[0]][0]) & (xs<=self.xend+C.XRANGE[C.orders[0]][1]) & (ys>=self.ystart+C.YRANGE[C.orders[0]][0]) & (ys<=self.yend+C.YRANGE[C.orders[0]][1])
+                #print("Truncating at ",self.xstart+C.XRANGE[C.orders[0]][0],self.xend+C.XRANGE[C.orders[0]][1],self.ystart+C.YRANGE[C.orders[0]][0],self.yend+C.YRANGE[C.orders[0]][1])
+                #xs = xs[ok]
+                #ys = ys[ok]
+                if (len(xs)>0) & (len(ys)>0):
+                    self.xs.append(xs)
+                    self.ys.append(ys)
+                    self.IDs = all_IDs
         else:
             vg = self.seg==self.ID
             ys,xs = np.nonzero(vg)            
-            self.xs.append(xs)
-            self.ys.append(ys)
-            self.IDs = [self.ID]
+            # Truncate for POM
+            #ok = (xs>=self.xstart+C.XRANGE[C.orders[0]][0]) & (xs<=self.xend+C.XRANGE[C.orders[0]][1]) & (ys>=self.ystart+C.YRANGE[C.orders[0]][0]) & (ys<=self.yend+C.YRANGE[C.orders[0]][1])
+            #print("Truncating at ",self.xstart+C.XRANGE[C.orders[0]][0],self.xend+C.XRANGE[C.orders[0]][1],self.ystart+C.YRANGE[C.orders[0]][0],self.yend+C.YRANGE[C.orders[0]][1])
+            #xs = xs[ok]
+            #ys = ys[ok]
+            if (len(xs)>0) & (len(ys)>0):    
+                self.xs.append(xs)
+                self.ys.append(ys)
+                self.IDs = [self.ID]
 
         self.fs = {}
         for dir_image in self.dir_images:
@@ -124,7 +158,8 @@ class observation():
             if self.SED_file==None:
                 self.fs[l] = []
                 for i in range(len(self.IDs)):
-                    self.fs[l].append(d[self.ys[i],self.xs[i]] * photflam)
+                    if d[self.ys[i],self.xs[i]]>0:
+                        self.fs[l].append(d[self.ys[i],self.xs[i]] * photflam)
             else:
                 # Need to normalize the object stamps              
                 for ID in self.IDs:
@@ -188,8 +223,8 @@ class observation():
     #             #print "we have:",len(IDs)
     #             self.fs["SED"] = d[self.ys,self.xs]
     #             #print "sum of this object:",np.sum(self.fs["SED"])
-
-   def disperse_all(self,cache=False):
+    
+    def disperse_all(self,cache=False):
 
         if cache:
             print("Object caching ON")
@@ -380,7 +415,7 @@ class observation():
                 f = [lams,fffs]
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
+                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
             h5f.close()
 
         else:
@@ -392,7 +427,7 @@ class observation():
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
                 lams = list(self.fs.keys())
                 f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
-                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED])
+                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
 
         # if self.cache:
         #     print(len(pars),"pixels loaded for dispersion and caching this object...")
