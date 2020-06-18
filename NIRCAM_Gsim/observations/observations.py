@@ -118,6 +118,8 @@ class observation():
                     self.xs.append(xs)
                     self.ys.append(ys)
                     self.IDs = all_IDs
+            if len(all_IDs) == 0:
+                self.IDs = []
         else:
             vg = self.seg==self.ID
             ys,xs = np.nonzero(vg)            
@@ -151,7 +153,6 @@ class observation():
                 d = fits.open(dir_image)[1].data
             except:
                 d = fits.open(dir_image)[0].data
-
 
             # If we do not use an SED file then we use photometry to get fluxes
             # Otherwise, we assume that objects are normalized to 1.
@@ -347,7 +348,7 @@ class observation():
             ID = 1
             xs0 = [xs[i],xs[i]+1,xs[i]+1,xs[i]]
             ys0 = [ys[i],ys[i],ys[i]+1,ys[i]+1]
-            pars.append([xs0,ys0,f,self.order,C,ID,False])
+            pars.append([xs0,ys0,f,self.order,C,ID,False,0.0,0.0])
             
 
         from multiprocessing import Pool
@@ -358,6 +359,7 @@ class observation():
         mypool.close()
 
         bck = np.zeros(naxis,np.float)
+                
         for i,pp in enumerate(all_res, 1): 
             if np.shape(pp.transpose())==(1,6):
                 continue
