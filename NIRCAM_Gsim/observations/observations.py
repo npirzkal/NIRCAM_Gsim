@@ -59,16 +59,20 @@ class observation():
         self.max_cpu = max_cpu
         self.cache = False
 
-        self.xstart = 0
-        self.xend = self.C.NAXIS[0]-1
-        self.ystart = 0
-        self.yend = self.C.NAXIS[1]-1
 
         if SBE_save!=None:
             if len(boundaries)!=4:
                 print("WARMING: boundaries needs to be specified if using SBE_save")
                 sys.exit()
+
+        if len(boundaries)!=4:
+            self.xstart = 0
+            self.xend = self.C.NAXIS[0]-1
+            self.ystart = 0
+            self.yend = self.C.NAXIS[1]-1
+        else:
             self.xstart,self.xend,self.ystart,self.yend = boundaries
+
 
         self.extrapolate_SED = extrapolate_SED # Allow for SED extrapolation
         if self.extrapolate_SED:
@@ -94,7 +98,7 @@ class observation():
         self.seg[:,:x0+1] = 0
         self.seg[:,x1:] = 0
         self.seg[:y0+1,:] = 0
-        self.seg[:,y1:] = 0
+        self.seg[y1:,:] = 0
         #fits.writeto("new_seg.fits",self.seg,overwrite=True)
 
     #def create_pixel_list_by_ID(self):
@@ -241,8 +245,8 @@ class observation():
         #     else:
         #         fhdf5 = h5py.File(self.SBE_save,"w")
 
-        for i in range(len(self.IDs)):
-            print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
+        for i in tqdm.tqdm(range(len(self.IDs))):
+            #print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
 
             if self.cache:
                 self.cached_object[i] = {}
@@ -283,7 +287,6 @@ class observation():
                 miny = np.min(yss)
                 maxy = np.max(yss)
 
-                print("======>",minx,maxx,miny,maxy)
                 this_SBE_object = this_SBE_object[miny:maxy+1,minx:maxx+1]
 
                 if os.path.isfile(self.SBE_save):
@@ -400,24 +403,28 @@ class observation():
 
         if self.SED_file!=None:
             import h5py
-            h5f = h5py.File(self.SED_file,'r')
-            # b = h5f['16524'][:]
-            pars = []
-            ID = int(self.seg[self.ys[c][0],self.xs[c][0]])
-            #print(ID)
-            tmp = h5f["%s" % (ID)][:]
-            for i in range(len(self.xs[c])):
-                #ID = int(self.seg[self.ys[c][i],self.xs[c][i]])
-                
-                lams = tmp[0]
-                fffs = tmp[1]*self.fs["SED"][c][i]
-                #print("should be <<1 ",self.fs["SED"][c][i],tmp[1])
-                f = [lams,fffs]
-                xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
-                ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
-            h5f.close()
+            with h5py.File(self.SED_file,'r') as h5f:
+                pars = []
+                ID = int(self.seg[self.ys[c][0],self.xs[c][0]])
 
+                tmp = h5f["%s" % (ID)][:]
+                for i in range(len(self.xs[c])):
+                    
+                    lams = tmp[0]
+                    fffs = tmp[1]*self.fs["SED"][c][i]
+
+                    # trim input spectrum 
+                    try:
+                        ok = (lams>self.C.WRANGE["+1"][0]) & (lams<self.C.WRANGE["+1"][1])
+                    except:
+                        ok = (lams>self.C.WRANGE["A"][0]) & (lams<self.C.WRANGE["A"][1])
+                    lams = lams[ok]
+                    fffs = fffs[ok]
+
+                    f = [lams,fffs]
+                    xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
+                    ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
+                    pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
         else:
         # good code below
             pars = []

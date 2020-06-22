@@ -10,10 +10,10 @@ from astropy.io import fits
 import numpy as np
 from .observations.observations \
 import observation as Gsim_observation 
-
+from multiprocessing import cpu_count 
     
 class Grism_seed():
-    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=5, SBE_save=None):
+    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=None, SBE_save=None):
         """A class for a grism simulation
 
         Attributes
@@ -54,6 +54,9 @@ class Grism_seed():
         self.cross_filter = cross_filter
         self.mode = mode
         self.config_path = config_path
+        if max_cpu is None:
+            max_cpu = cpu_count() - 1
+
         self.max_cpu = max_cpu
         self.SBE_save = SBE_save
 
