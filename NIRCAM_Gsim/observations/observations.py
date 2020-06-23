@@ -350,8 +350,8 @@ class observation():
             ID = 1
             xs0 = [xs[i],xs[i]+1,xs[i]+1,xs[i]]
             ys0 = [ys[i],ys[i],ys[i]+1,ys[i]+1]
-            pars.append([xs0,ys0,f,self.order,C,ID,False])
-            
+            pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart])
+
 
         from multiprocessing import Pool
         import time
