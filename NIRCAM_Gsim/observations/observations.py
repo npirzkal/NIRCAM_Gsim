@@ -94,14 +94,11 @@ class observation():
         y1 = int(self.yend+self.C.YRANGE[self.C.orders[0]][1] + 0.5)
         from astropy.io import fits
         print("POM footprint applied:",x0,x1,y0,y1)
-        #fits.writeto("org_seg.fits",self.seg,overwrite=True)
         self.seg[:,:x0+1] = 0
         self.seg[:,x1:] = 0
         self.seg[:y0+1,:] = 0
         self.seg[y1:,:] = 0
-        #fits.writeto("new_seg.fits",self.seg,overwrite=True)
 
-    #def create_pixel_list_by_ID(self):
     def create_pixel_list(self):
         # Create a list of pixels to dispersed, grouped per object ID
         if self.ID==0:
@@ -113,11 +110,6 @@ class observation():
             for ID in all_IDs:
                 ys,xs = np.nonzero(self.seg==ID)
 
-                # Truncate for POM
-                #ok = (xs>=self.xstart+C.XRANGE[C.orders[0]][0]) & (xs<=self.xend+C.XRANGE[C.orders[0]][1]) & (ys>=self.ystart+C.YRANGE[C.orders[0]][0]) & (ys<=self.yend+C.YRANGE[C.orders[0]][1])
-                #print("Truncating at ",self.xstart+C.XRANGE[C.orders[0]][0],self.xend+C.XRANGE[C.orders[0]][1],self.ystart+C.YRANGE[C.orders[0]][0],self.yend+C.YRANGE[C.orders[0]][1])
-                #xs = xs[ok]
-                #ys = ys[ok]
                 if (len(xs)>0) & (len(ys)>0):
                     self.xs.append(xs)
                     self.ys.append(ys)
@@ -125,11 +117,7 @@ class observation():
         else:
             vg = self.seg==self.ID
             ys,xs = np.nonzero(vg)            
-            # Truncate for POM
-            #ok = (xs>=self.xstart+C.XRANGE[C.orders[0]][0]) & (xs<=self.xend+C.XRANGE[C.orders[0]][1]) & (ys>=self.ystart+C.YRANGE[C.orders[0]][0]) & (ys<=self.yend+C.YRANGE[C.orders[0]][1])
-            #print("Truncating at ",self.xstart+C.XRANGE[C.orders[0]][0],self.xend+C.XRANGE[C.orders[0]][1],self.ystart+C.YRANGE[C.orders[0]][0],self.yend+C.YRANGE[C.orders[0]][1])
-            #xs = xs[ok]
-            #ys = ys[ok]
+           
             if (len(xs)>0) & (len(ys)>0):    
                 self.xs.append(xs)
                 self.ys.append(ys)
@@ -162,8 +150,7 @@ class observation():
             if self.SED_file==None:
                 self.fs[l] = []
                 for i in range(len(self.IDs)):
-                    if d[self.ys[i],self.xs[i]]>0:
-                        self.fs[l].append(d[self.ys[i],self.xs[i]] * photflam)
+                    self.fs[l].append(d[self.ys[i],self.xs[i]] * photflam)
             else:
                 # Need to normalize the object stamps              
                 for ID in self.IDs:
@@ -175,58 +162,6 @@ class observation():
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):
                     self.fs["SED"].append(d[self.ys[i],self.xs[i]])
-
-
-
-    # def create_pixel_listOLD(self):
-
-    #     if self.ID==0:
-    #         self.ys,self.xs = np.nonzero(self.seg)
-    #     else:
-    #         #print("looking at",self.ID)
-    #         vg = self.seg==self.ID
-    #         self.ys,self.xs = np.nonzero(vg)            
-    #         #print self.ys,self.xs
-
-    #     print(len(self.xs),"pixels to process")
-    #     self.fs = {}
-    #     for dir_image in self.dir_images:
-    #         print("dir image:",dir_image)
-    #         if self.SED_file==None:
-    #             try:
-    #                 l = fits.getval(dir_image,'PHOTPLAM') / 10000. # in Angsrrom and we want Micron now
-    #             except:
-    #                 print("WARNING: unable to find PHOTPLAM keyword in {}".format(dir_image))
-    #                 sys.exit()
-
-    #             try:
-    #                 photflam = fits.getval(dir_image,'photflam')
-    #             except:
-    #                 print("WARNING: unable to find PHOTFLAM keyword in {}".format(dir_image))
-    #                 sys.exit()
-    #             print("Loaded",dir_image, "wavelength:",l,"micron")
-    #         try:
-    #             d = fits.open(dir_image)[1].data
-    #         except:
-    #             d = fits.open(dir_image)[0].data
-
-    #         # If we do not use an SED file then we use photometry to get fluxes
-    #         # Otherwise, we assume that objects are normalized to 1.
-    #         if self.SED_file==None:
-    #             self.fs[l] = d[self.ys,self.xs] * photflam
-    #         else:
-    #             # Need to normalize the object stamps
-    #             IDs = set(np.ravel(self.seg))
-                
-    #             for ID in IDs:
-    #                 if ID==0: continue
-    #                 vg = self.seg==ID
-    #                 sum_seg = np.sum(d[vg])
-    #                 if sum_seg!=0.:
-    #                     d[vg] = d[vg]/sum_seg
-    #             #print "we have:",len(IDs)
-    #             self.fs["SED"] = d[self.ys,self.xs]
-    #             #print "sum of this object:",np.sum(self.fs["SED"])
     
     def disperse_all(self,cache=False):
 
@@ -234,20 +169,10 @@ class observation():
             print("Object caching ON")
             self.cache = True
             self.cached_object = {}
-            # self.cached_object2 = {}
 
         self.simulated_image = np.zeros(self.dims,np.float)
 
-        # if self.SBE_save != None:
-        #     print("Outputing to ", self.SBE_save)
-        #     if os.path.isfile(self.SBE_save):
-        #         fhdf5 = h5py.File(self.SBE_save,"r+")    
-        #     else:
-        #         fhdf5 = h5py.File(self.SBE_save,"w")
-
         for i in tqdm.tqdm(range(len(self.IDs))):
-            #print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i])
-
             if self.cache:
                 self.cached_object[i] = {}
                 self.cached_object[i]['x'] = []
@@ -261,19 +186,11 @@ class observation():
 
             this_object = self.disperse_chunk(i)
 
-            # if cached:
-            #     self.cached_object2[i] = {}
-            #     self.cached_object2[i]['x'] = comprehension_flatten(self.cached_object[i]['x'])
-            #     self.cached_object2[i]['y'] = comprehension_flatten(self.cached_object[i]['y'])
-            #     self.cached_object2[i]['f'] = comprehension_flatten(self.cached_object[i]['f'])
-            #     self.cached_object2[i]['w'] = comprehension_flatten(self.cached_object[i]['w'])
-
             if self.SBE_save != None:
                 # If SBE_save is enabled, we create an HDF5 file containing the stamp of this simulated object
                 # order is in self.order
                 # We just save the x,y,f,w arrays as well as info about minx,maxx,miny,maxy
-                
-
+    
                 # We trim the stamp to avoid padding area
                 this_SBE_object =  this_object[self.ystart:self.yend+1,self.xstart:self.xend+1]
                 
@@ -302,9 +219,6 @@ class observation():
                     dset.attrs[u'maxy'] = maxy
                     dset.attrs[u'units'] = 'e-/s'
 
-
-        # if self.SBE_save != None:
-        #     fhdf5.close()
 
     def disperse_background_1D(self,background):
         """Method to create a simple disperse background, obtained by dispersing a full row or column.
@@ -398,10 +312,10 @@ class observation():
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
         from multiprocessing import Pool
-        #from progressbar import Bar, ETA, ReverseBar, ProgressBar, Percentage
         import time
 
         if self.SED_file!=None:
+            # We use an input spectrum file
             import h5py
             with h5py.File(self.SED_file,'r') as h5f:
                 pars = []
@@ -426,34 +340,25 @@ class observation():
                     ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
                     pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
         else:
-        # good code below
+            # No spectrum passed
             pars = []
             for i in range(len(self.xs[c])):
                 ID = i
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
                 lams = list(self.fs.keys())
-                f = [lams,[self.fs[l][c][i] for l in self.fs.keys()]]
+                flxs = np.array([self.fs[l][c][i] for l in self.fs.keys()])
+                ok = flxs!=0 # We avoid any pixel containing pure 0's
+                f = [lams[ok],flxs[ok]]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
 
-        # if self.cache:
-        #     print(len(pars),"pixels loaded for dispersion and caching this object...")
-        # else:
-        #     print(len(pars),"pixels loaded for dispersion...")
 
         time1 = time.time()
         mypool = Pool(self.max_cpu) # Create pool
         all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
         mypool.close() # No more work
 
-        #widgets=[Percentage(), Bar(), ETA()]
-        #pbar = ProgressBar(widgets=widgets, maxval=len(pars)).start()
-
-        #simulated_image = np.zeros(self.dims,np.float)
         this_object = np.zeros(self.dims,np.float)
-
-        
-        
 
         for i,pp in enumerate(all_res, 1): 
 
@@ -483,7 +388,6 @@ class observation():
             this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
 
             if self.cache:
-                #print("Caching it")
                 self.cached_object[c]['x'].append(x)
                 self.cached_object[c]['y'].append(y)
                 self.cached_object[c]['f'].append(f)
@@ -497,7 +401,6 @@ class observation():
 
         time2 = time.time()
 
-        # print("Dispersion took:",time2-time1,"s.")
         return this_object
 
     def disperse_all_from_cache(self,trans=None):
@@ -508,7 +411,6 @@ class observation():
         self.simulated_image = np.zeros(self.dims,np.float)
 
         for i in tqdm.tqdm(range(len(self.IDs)),desc="Dispersing from cache"):
-            #print("Dispersing ",i+1,"of",len(self.IDs),"ID:",self.IDs[i],"from cached version")
             this_object = self.disperse_chunk_from_cache(i,trans=trans)
 
 
@@ -525,14 +427,6 @@ class observation():
         
         this_object = np.zeros(self.dims,np.float)
 
-        # x = self.cached_object2[c]['x']
-        # y = self.cached_object2[c]['y']
-        # f = self.cached_object2[c]['f']
-        # w = self.cached_object2[c]['w']
-
-        # a = sparse.coo_matrix((f, (y, x)), shape=self.dims).toarray()
-        # self.simulated_image += a
-        # this_object +=  a
         if trans!=None:
                 print("Applying a transmission function...")
         for i in range(len(self.cached_object[c]['x'])): 
