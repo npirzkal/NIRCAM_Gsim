@@ -92,6 +92,13 @@ class observation():
         x1 = int(self.xend+self.C.XRANGE[self.C.orders[0]][1] + 0.5)
         y0 = int(self.ystart+self.C.YRANGE[self.C.orders[0]][0] + 0.5)
         y1 = int(self.yend+self.C.YRANGE[self.C.orders[0]][1] + 0.5)
+
+        if x0<0: x0 = 0
+        if y0<0: y0 = 0
+        ymax,xmax = np.shape(self.seg)
+        if x0+1>xmax: x0 = xmax-1
+        if y0+1>ymax: y0 = ymax-1
+
         from astropy.io import fits
         print("POM footprint applied:",x0,x1,y0,y1)
         self.seg[:,:x0+1] = 0
