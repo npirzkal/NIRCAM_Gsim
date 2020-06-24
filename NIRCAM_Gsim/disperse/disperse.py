@@ -46,7 +46,7 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
         A list containing the ID. Returned for bookkeeping convenience.
     """
     if len(f0[0])>1:
-        print("f0:",f0,len(f0[0]),len(f0[1]))
+        #print("f0:",f0,len(f0[0]),len(f0[1]))
         if extrapolate_SED==False:
             f = interp1d(f0[0],f0[1],fill_value=0.,bounds_error=False)
         else:
