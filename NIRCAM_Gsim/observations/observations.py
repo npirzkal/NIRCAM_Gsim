@@ -34,7 +34,7 @@ class observation():
         max_split: Number of chunks to compute instead of trying everything at once.
         SED_file: Name of HDF5 file containing datasets matching the ID in the segmentation file and each consisting of a [[lambda],[flux]] array.
         SBE_save: If set to a path, HDF5 containing simulated stamps for all obsjects will be saved.
-        boundaries: a tuple containing the coordinates of the FOV within the larger seed image. Needs to be specified if SBE_save!=None
+        boundaries: a tuple containing the coordinates of the FOV within the larger seed image.
         """
 
         self.C = grismconf.Config(config)
@@ -60,20 +60,23 @@ class observation():
         self.cache = False
 
 
-        if SBE_save!=None:
-            if len(boundaries)!=4:
-                print("WARMING: boundaries needs to be specified if using SBE_save")
-                sys.exit()
+        # if SBE_save!=None:
+        #     if len(boundaries)!=4:
+        #         print("WARMING: boundaries needs to be specified if using SBE_save")
+        #         sys.exit()
 
         if len(boundaries)!=4:
-            self.xstart = 0
-            self.xend = self.C.NAXIS[0]-1
-            self.ystart = 0
-            self.yend = self.C.NAXIS[1]-1
+            xpad = (np.shape(segmentation_data)[1]-self.C.NAXIS[0])//2
+            ypad = (np.shape(segmentation_data)[0]-self.C.NAXIS[1])//2
+            self.xstart = 0 + xpad
+            self.xend = xpad + self.C.NAXIS[0]-1
+            self.ystart = 0 + ypad
+            self.yend = ypad + self.C.NAXIS[1]-1
+            print("No boundaries passed. Assuming symmetrical padding of {} {} pixels and a final size of {} {} .".format(xpad,ypad,self.xend+1-self.xstart,self.yend+1-self.ystart))
         else:
             self.xstart,self.xend,self.ystart,self.yend = boundaries
 
-
+        
         self.extrapolate_SED = extrapolate_SED # Allow for SED extrapolation
         if self.extrapolate_SED:
             print("Warning: SED Extrapolation turned on.")
@@ -100,7 +103,8 @@ class observation():
         if y0+1>ymax: y0 = ymax-1
 
         from astropy.io import fits
-        print("POM footprint applied:",x0,x1,y0,y1)
+        print("POM footprint applied: [{}:{},{}:{}]".format(x0,x1,y0,y1))
+        print("Pixels outside of this region of the input data ([{},{}]) will not be dispersed.".format(xmax,ymax))
         self.seg[:,:x0+1] = 0
         self.seg[:,x1:] = 0
         self.seg[:y0+1,:] = 0
@@ -353,10 +357,15 @@ class observation():
                 ID = i
                 xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                 ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-                lams = list(self.fs.keys())
+                lams = np.array(list(self.fs.keys()))
                 flxs = np.array([self.fs[l][c][i] for l in self.fs.keys()])
                 ok = flxs!=0 # We avoid any pixel containing pure 0's
+                ###f = [lams[ok],flxs[ok]]
+                #print("flxs:",flxs)
+                #print("new:",flxs[ok])
+                if len(flxs[ok])==0: continue
                 f = [lams[ok],flxs[ok]]
+                #print("f:",f)
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
 
 
