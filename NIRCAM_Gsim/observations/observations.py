@@ -360,13 +360,15 @@ class observation():
                 lams = np.array(list(self.fs.keys()))
                 flxs = np.array([self.fs[l][c][i] for l in self.fs.keys()])
                 ok = flxs!=0 # We avoid any pixel containing pure 0's
-                ###f = [lams[ok],flxs[ok]]
-                #print("flxs:",flxs)
-                #print("new:",flxs[ok])
                 if len(flxs[ok])==0: continue
-                f = [lams[ok],flxs[ok]]
-                #print("f:",f)
+                flxs = flxs[ok]
+                lams = lams[ok]
+                ok = np.argsort(lams)
+                flxs = flxs[ok]
+                lams = lams[ok]
+                f = [lams,flxs]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
+
 
 
         time1 = time.time()
