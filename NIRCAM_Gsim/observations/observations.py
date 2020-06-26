@@ -38,9 +38,6 @@ class observation():
         """
 
         self.C = grismconf.Config(config)
-        if self.C.__version__!=1.2:
-            print("Need grismconf v.1.2")
-            sys.exit(-1)
             
         if plot:
             import matplotlib.pyplot as plt
