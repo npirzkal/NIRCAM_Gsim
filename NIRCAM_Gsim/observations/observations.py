@@ -47,6 +47,7 @@ class observation():
             plt.plot(x,self.C.SENS[order](x))
 
         self.ID = ID
+        self.IDs = []
         self.dir_images = direct_images
         self.seg = segmentation_data
         self.dims = np.shape(self.seg)
