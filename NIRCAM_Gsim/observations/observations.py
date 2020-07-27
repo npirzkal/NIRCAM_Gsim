@@ -234,8 +234,8 @@ class observation():
         We assume no field dependence in the cross dispersion direction and create a full 2D image by tiling a single dispersed row or column"""
 
         # Create a fake object, line in middle of detector
-        naxis = self.dims
         C = self.C
+        naxis = [self.xend-self.xstart+1 ,self.yend-self.ystart+1] 
         xpos,ypos = naxis[0]//2,naxis[1]//2
 
         # Find out if this an x-direction or y-direction dispersion
