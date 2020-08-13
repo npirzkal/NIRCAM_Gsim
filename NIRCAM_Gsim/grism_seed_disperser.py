@@ -95,6 +95,7 @@ class Grism_seed():
         self.this_one = {}
 
         # If orders are not passed, we get them from the config file
+        
         if orders==None:
             import grismconf
             C = grismconf.Config(self.config)
@@ -104,7 +105,8 @@ class Grism_seed():
             self.orders = orders
             
         for order in self.orders:
-            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=[self.xstart,self.xend,self.ystart,self.yend])
+            boundaries = [self.xstart,self.xend,self.ystart,self.yend]
+            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries)
             #self.this_one[order].disperse_all()
 
     def disperse(self,orders=None,cache=False,trans=None):

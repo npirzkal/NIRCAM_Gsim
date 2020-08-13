@@ -10,7 +10,7 @@ def read(fname):
 
 setup(
 	name='NIRCAM_Gsim',
-	version='1.3b3',
+	version='1.4b1',
 	description='NIRCAM Grism simulator, includes J.D. Smith polyclip C code',
     url='https://github.com/npirzkal/GRISM_NIRCAM',
 	author='Nor Pirzkal',
@@ -23,6 +23,6 @@ setup(
     ext_modules=[Extension('NIRCAM_Gsim.polyclip.polyclip_c', ['NIRCAM_Gsim/polyclip/polyclip_c.c'])],
     install_requires=[
     "tqdm > 4.0.0",
-    "grismconf >= 1.2"
+    "grismconf >= 1.24"
 ],
 )

@@ -9,6 +9,26 @@ from astropy.table import Table
 from ..disperse.disperse import dispersed_pixel
 import h5py
 import tqdm
+from scipy.interpolate import interp1d
+
+class interp1d_picklable(object):
+    """ class wrapper for piecewise linear function
+    """
+
+    def __init__(self, xi, yi, **kwargs):
+        self.xi = xi
+        self.yi = yi
+        self.args = kwargs
+        self.f = interp1d(xi, yi, **kwargs)
+
+    def __call__(self, xnew):
+        return self.f(xnew)
+
+    def __getstate__(self):
+        return self.xi, self.yi, self.args
+
+    def __setstate__(self, state):
+        self.f = interp1d(state[0], state[1], **state[2])
 
 def comprehension_flatten( aList ):
         return list(y for x in aList for y in x)
@@ -56,14 +76,30 @@ class observation():
         self.SBE_save = SBE_save
         self.max_cpu = max_cpu
         self.cache = False
+        self.POM_mask = None
+        self.POM_mask01 = None
+        
+        if self.C.POM is not None:
+            print("Using POM mask",self.C.POM)
+            with fits.open(self.C.POM) as fin:
+                self.POM_mask = fin[1].data
+                self.POM_mask01 = fin[1].data * 1. # A version of the mask that only contains 0-1 values. Pixels with labels/values>10000 are set to 1.
+                self.POM_mask01[self.POM_mask01>=10000] = 1.
+                self.Pxstart = int(fin[1].header["NOMXSTRT"])
+                self.Pxend = int(fin[1].header["NOMXEND"])
+                self.Pystart = int(fin[1].header["NOMYSTRT"])
+                self.Pyend = int(fin[1].header["NOMYEND"])
 
+                if len(fin)>2:
+                    print("Loading extra optical element transmission curves from POM file")
+                    self.POM_transmission = {}
+                    for i in range(2,len(fin)):
+                        w = fin[i].data["Wavelength"]
+                        t = fin[i].data["Transmission"]
+                        indx = int(fin[i].header["POMINDX"])
+                        self.POM_transmission[indx] = interp1d_picklable(w,t,bounds_error=False,fill_value=0.)
 
-        # if SBE_save!=None:
-        #     if len(boundaries)!=4:
-        #         print("WARMING: boundaries needs to be specified if using SBE_save")
-        #         sys.exit()
-
-        if len(boundaries)!=4:
+        if len(boundaries)!=4:           
             xpad = (np.shape(segmentation_data)[1]-self.C.NAXIS[0])//2
             ypad = (np.shape(segmentation_data)[0]-self.C.NAXIS[1])//2
             self.xstart = 0 + xpad
@@ -88,26 +124,82 @@ class observation():
 
     def apply_POM(self):
         """Account for the finite size of the POM and remove pixels in segmentation files which should not
-        be dispersed"""
-        x0 = int(self.xstart+self.C.XRANGE[self.C.orders[0]][0] + 0.5)
-        x1 = int(self.xend+self.C.XRANGE[self.C.orders[0]][1] + 0.5)
-        y0 = int(self.ystart+self.C.YRANGE[self.C.orders[0]][0] + 0.5)
-        y1 = int(self.yend+self.C.YRANGE[self.C.orders[0]][1] + 0.5)
+        be dispersed.
+        If a POM mask array was loaded then we make sure it is modified to have the same size as the input seg map
+        and with the detector FOV starting at the same pixel locations as the input seg map."""
 
-        if x0<0: x0 = 0
-        if y0<0: y0 = 0
-        ymax,xmax = np.shape(self.seg)
-        if x0+1>xmax: x0 = xmax-1
-        if y0+1>ymax: y0 = ymax-1
+        if self.POM_mask is None:
+            x0 = int(self.xstart+self.C.XRANGE[self.C.orders[0]][0] + 0.5)
+            x1 = int(self.xend+self.C.XRANGE[self.C.orders[0]][1] + 0.5)
+            y0 = int(self.ystart+self.C.YRANGE[self.C.orders[0]][0] + 0.5)
+            y1 = int(self.yend+self.C.YRANGE[self.C.orders[0]][1] + 0.5)
 
-        from astropy.io import fits
-        print("POM footprint applied: [{}:{},{}:{}]".format(x0,x1,y0,y1))
-        print("Pixels outside of this region of the input data ([{},{}]) will not be dispersed.".format(xmax,ymax))
-        self.seg[:,:x0+1] = 0
-        self.seg[:,x1:] = 0
-        self.seg[:y0+1,:] = 0
-        self.seg[y1:,:] = 0
+            if x0<0: x0 = 0
+            if y0<0: y0 = 0
+            ymax,xmax = np.shape(self.seg)
+            if x0+1>xmax: x0 = xmax-1
+            if y0+1>ymax: y0 = ymax-1
 
+            from astropy.io import fits
+            print("POM footprint applied: [{}:{},{}:{}]".format(x0,x1,y0,y1))
+            print("Pixels outside of this region of the input data ([{},{}]) will not be dispersed.".format(xmax,ymax))
+            self.seg[:,:x0+1] = 0
+            self.seg[:,x1:] = 0
+            self.seg[:y0+1,:] = 0
+            self.seg[y1:,:] = 0
+        else:
+            self.Pxstart - self.xstart
+            self.Pystart - self.ystart
+
+            ys1,xs1 = np.shape(self.POM_mask)
+            ys2,xs2 = np.shape(self.seg)
+
+            #print("xstart ettc:",self.xstart,self.xend,self.ystart,self.yend)
+            #print("POM start etc:",self.Pxstart ,self.Pxend,self.Pystart ,self.Pyend)
+            #print(self.Pystart - self.ystart,self.yend-self.ystart,self.Pxstart - self.xstart+1,self.xend-self.xstart+1)
+            if (xs1>xs2) or (ys1>ys2):
+                print("Warning: The input seg map is smaller ({},{}) than the POM mask ({},{}) for this mode.".format(xs2,ys2,xs1,ys1))
+                raise Exception("Invalid seg map size.")
+
+            # Crate a new POM mask that is the size of the input seg and data arrays
+            # Compute the offset between where the detector is in the original POM mask and the input sef file
+            xoff = self.xstart - self.Pxstart
+            yoff = self.ystart - self.Pystart
+
+            if (xoff<0) or (yoff<0):
+                print("Warning: the input seg map and POM mask are not compatible. The seg map needs a larger border around the detector FOV than the POM mask.")
+                print("seg map detector FOV starts at {} {}".format(self.xstart,self.ystart))
+                print("POM mask detector FOV starts at {} {}".format(self.Pxstart,self.Pystart))
+                raise Exception("Invalid seg map size.")
+ 
+            POM = np.zeros(np.shape(self.seg))
+            POM[yoff:yoff+ys1,xoff:xoff+xs1] = self.POM_mask
+            self.POM_mask = POM*1
+
+            # POM = np.zeros(np.shape(self.seg))
+            # POM[yoff:yoff+ys1,xoff:xoff+xs1] = self.POM_mask
+            POM[POM>1] = 1
+            self.POM_mask01 = POM*1
+
+            self.Pxstart  = self.xstart
+            self.Pxend  = self.xend
+            self.Pystart  = self.ystart
+            self.Pyend  = self.ystart
+
+            # We apply the POM mask to the seg file, but only as a mask, romving pixels getting no lights. We keep the POM mask with its orginal values otherwise 
+            # to be able to account for partial transmission later on.
+    
+
+            from astropy.io import fits
+            #print("POM size:",np.shape(POM))
+            #print("seg size:",np.shape(self.seg))
+            fits.writeto("seg_org.fits",self.seg,overwrite=True)
+            self.seg = self.seg * self.POM_mask01 
+            fits.writeto("POM_msk.fits",self.POM_mask,overwrite=True)
+            fits.writeto("POM.fits",self.POM_mask01 ,overwrite=True)
+            fits.writeto("seg_msk.fits",self.seg,overwrite=True)
+
+        #sys.exit(1)
     def create_pixel_list(self):
         # Create a list of pixels to dispersed, grouped per object ID
         if self.ID==0:
@@ -153,18 +245,21 @@ class observation():
             except:
                 d = fits.open(dir_image)[0].data
 
-
             # If we do not use an SED file then we use photometry to get fluxes
             # Otherwise, we assume that objects are normalized to 1.
             if self.SED_file==None:
                 self.fs[l] = []
+                dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels
                 for i in range(len(self.IDs)):
-                    self.fs[l].append(d[self.ys[i],self.xs[i]] * photflam)
+                    self.fs[l].append(dnew[self.ys[i],self.xs[i]] * photflam)
             else:
                 # Need to normalize the object stamps              
                 for ID in self.IDs:
                     vg = self.seg==ID
-                    sum_seg = np.sum(d[vg])
+                    if self.POM_mask is not None:
+                        #print("Applying POM transmission to data")
+                        dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels. This is a single grey correction for the whole object.
+                    sum_seg = np.sum(d[vg]) # But normalize by the whole flux
                     if sum_seg!=0.:
                         d[vg] = d[vg]/sum_seg
 
@@ -344,6 +439,17 @@ class observation():
                     lams = lams[ok]
                     fffs = fffs[ok]
 
+                    if self.POM_mask is not None:
+                        POM_value = self.POM_mask[self.ys[c][i],self.xs[c][i]]
+                    else:
+                        POM_value = 1.
+                    if POM_value>=10000:
+                        #print("Applying additional transmission of :",self.xs[c][i],self.ys[c][i],POM_value)
+                        trans = self.POM_transmission[POM_value](lams)
+                        fffs = fffs * trans
+                    else:
+                        fffs = fffs * POM_value
+
                     f = [lams,fffs]
                     xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                     ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
@@ -364,6 +470,18 @@ class observation():
                 ok = np.argsort(lams)
                 flxs = flxs[ok]
                 lams = lams[ok]
+
+                if self.POM_mask is not None:
+                    POM_value = self.POM_mask[self.ys[c][i],self.xs[c][i]]
+                else:
+                    POM_value = 1,
+                if POM_value>1:
+                    #print("Applying additional transmission of :",self.xs[c][i],self.ys[c][i],POM_value)
+                    trans = self.POM_transmission[POM_value](lams)
+                    flxs = flxs * trans
+                else:
+                    flxs = flxs * POM_value
+
                 f = [lams,flxs]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
 
