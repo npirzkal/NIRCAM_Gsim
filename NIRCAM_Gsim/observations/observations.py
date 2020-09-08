@@ -45,7 +45,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[]):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[], renormalize=True):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -78,7 +78,7 @@ class observation():
         self.cache = False
         self.POM_mask = None
         self.POM_mask01 = None
-        
+        self.renormalize = renormalize
         if self.C.POM is not None:
             print("Using POM mask",self.C.POM)
             with fits.open(self.C.POM) as fin:
@@ -259,9 +259,12 @@ class observation():
                     if self.POM_mask is not None:
                         #print("Applying POM transmission to data")
                         dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels. This is a single grey correction for the whole object.
-                    sum_seg = np.sum(d[vg]) # But normalize by the whole flux
-                    if sum_seg!=0.:
-                        d[vg] = d[vg]/sum_seg
+                    if self.renormalize is True:
+                        sum_seg = np.sum(d[vg]) # But normalize by the whole flux
+                        if sum_seg!=0.:
+                            d[vg] = d[vg]/sum_seg
+                    else:
+                        print("not renormlazing sources to unity")
 
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):

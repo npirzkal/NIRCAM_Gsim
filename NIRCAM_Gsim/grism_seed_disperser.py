@@ -13,7 +13,7 @@ import observation as Gsim_observation
 from multiprocessing import cpu_count 
     
 class Grism_seed():
-    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=None, SBE_save=None):
+    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=None, SBE_save=None, renormalize=True):
         """A class for a grism simulation
 
         Attributes
@@ -36,7 +36,8 @@ class Grism_seed():
             An integer containing the number of CPU to use in the multiheaded pool when dispersing
         SBE_save: str
             A string containing the name of an output HDF5 file which will contain simulated 2D stamps of each source
-
+        renormalize: vol
+            Whether to renormalize the input data to unity over segmentation map area when using an input spectrum.
         Methods
         -------
         observation(self,orders=["+1","+2"],max_split=-1000,ID=0)
@@ -78,6 +79,7 @@ class Grism_seed():
 
         self.extrapolate_SED = extrapolate_SED
         self.SED_file = SED_file
+        self.renormalize = renormalize
 
     def observation(self,orders=None,max_split=-1000,ID=0):
         """Sets up an observation.
@@ -106,7 +108,7 @@ class Grism_seed():
             
         for order in self.orders:
             boundaries = [self.xstart,self.xend,self.ystart,self.yend]
-            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries)
+            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize)
             #self.this_one[order].disperse_all()
 
     def disperse(self,orders=None,cache=False,trans=None):
@@ -172,7 +174,8 @@ class Grism_seed():
             if type(Back)==np.ndarray:
                 final = Back
             else:
-                final = fits.open(os.path.join(self.config_path,Back))[0].data
+                with fits.open(os.path.join(self.config_path,Back)) as fin:
+                    final = fin[-1].data
             if BackLevel!=None:
                 final = final/np.max(final)*BackLevel
         else:
