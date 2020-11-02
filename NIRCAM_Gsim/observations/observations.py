@@ -479,7 +479,7 @@ class observation():
                 if self.POM_mask is not None:
                     POM_value = self.POM_mask[self.ys[c][i],self.xs[c][i]]
                 else:
-                    POM_value = 1,
+                    POM_value = 1.
                 if POM_value>1:
                     #print("Applying additional transmission of :",self.xs[c][i],self.ys[c][i],POM_value)
                     trans = self.POM_transmission[POM_value](lams)
