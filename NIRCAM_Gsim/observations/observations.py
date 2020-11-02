@@ -270,7 +270,7 @@ class observation():
 
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):
-                    self.fs["SED"].append(d[self.ys[i],self.xs[i]])
+                    self.fs["SED"].append(dnew[self.ys[i],self.xs[i]])
     
     def disperse_all(self,cache=False):
 
