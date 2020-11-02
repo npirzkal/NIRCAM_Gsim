@@ -249,7 +249,9 @@ class observation():
             # Otherwise, we assume that objects are normalized to 1.
             if self.SED_file==None:
                 self.fs[l] = []
-                dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels
+                dnew = d
+                if self.POM_mask01 is not None:
+                    dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels
                 for i in range(len(self.IDs)):
                     self.fs[l].append(dnew[self.ys[i],self.xs[i]] * photflam)
             else:
