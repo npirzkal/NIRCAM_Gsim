@@ -193,11 +193,11 @@ class observation():
             from astropy.io import fits
             #print("POM size:",np.shape(POM))
             #print("seg size:",np.shape(self.seg))
-            fits.writeto("seg_org.fits",self.seg,overwrite=True)
+            #fits.writeto("seg_org.fits",self.seg,overwrite=True)
             self.seg = self.seg * self.POM_mask01 
-            fits.writeto("POM_msk.fits",self.POM_mask,overwrite=True)
-            fits.writeto("POM.fits",self.POM_mask01 ,overwrite=True)
-            fits.writeto("seg_msk.fits",self.seg,overwrite=True)
+            #fits.writeto("POM_msk.fits",self.POM_mask,overwrite=True)
+            #fits.writeto("POM.fits",self.POM_mask01 ,overwrite=True)
+            #fits.writeto("seg_msk.fits",self.seg,overwrite=True)
 
         #sys.exit(1)
     def create_pixel_list(self):
@@ -256,7 +256,7 @@ class observation():
                 # Need to normalize the object stamps              
                 for ID in self.IDs:
                     vg = self.seg==ID
-                    if self.POM_mask is not None:
+                    if self.POM_mask01 is not None:
                         #print("Applying POM transmission to data")
                         dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels. This is a single grey correction for the whole object.
                     if self.renormalize is True:
