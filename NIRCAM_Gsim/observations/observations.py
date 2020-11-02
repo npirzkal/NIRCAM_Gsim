@@ -258,6 +258,7 @@ class observation():
                 # Need to normalize the object stamps              
                 for ID in self.IDs:
                     vg = self.seg==ID
+                    dnew = d
                     if self.POM_mask01 is not None:
                         #print("Applying POM transmission to data")
                         dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels. This is a single grey correction for the whole object.
