@@ -224,7 +224,7 @@ class Grism_seed():
             print("adding passed background array as is")
             final = Back
 
-        if tofits!=None:
+        if not ((Back is None) and (BackLevel is None)) and (tofits!=None):
             # Save the background image to a fits file
             hprime = fits.PrimaryHDU()
             himg = fits.ImageHDU(final)
