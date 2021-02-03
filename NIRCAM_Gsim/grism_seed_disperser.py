@@ -132,10 +132,13 @@ class Grism_seed():
             else:
                 self.this_one[order].disperse_all(cache=cache)
 
-    def disperse_background_1D(self,background):
+    def disperse_background_1D(self,background,force=False):
         """Produces a dispersed 2D image of the background spectrum contained in the fits file background, meant to be the 
         output of thr jwst_background module. This background is dispersed either in the row or column direction, depending on the 
         dispersion, and the result is tiled to produce a full 2D image. All orders are generated and added up.
+        If self.BCK is not None and force is set to False then the content of the file pointed to by self.BCK is loaded and returned
+        instead of doing a quick approximate 1D dispersion of the input spectrum. In cases where the already existing 2D dispersed 
+        background is not wanted, set force=True
 
         Parameters
         ----------
@@ -143,18 +146,23 @@ class Grism_seed():
             A 2D numpy array containing the spectrum of the background to disperse. 
             The wavelength should be in (micron) and the flux (in Mjy/sr), as is produced by 
             the jwst_background package
-
+        force: Force the creation of the dispersed 1D background even if a full 2D model already exists.
         output: numpy 2D array
             A 2D array containing the model background which can be fed back into finalize()
         """
 
+        import grismconf
+        C = grismconf.Config(self.config)
+        if (force is True) or (C.BCK is None):
+            bck = 0.
+            for order in self.orders:
+                print("Computing dispersed background for order ",order)
+                bck += self.this_one[order].disperse_background_1D(background) 
+        else:
+            print("Loading dispersed background from ", C.BCK)
+            bck = fits.open(C.BCK)[1].data
 
-        bck = 0.
-        for order in self.orders:
-            print("Computing dispersed background for order ",order)
-            bck += self.this_one[order].disperse_background_1D(background) 
-
-        fits.writeto("WFSS_background.fits",bck,overwrite=True)
+#        fits.writeto("WFSS_background.fits",bck,overwrite=True)
         return bck
 
     def finalize(self,tofits=None,Back=None,BackLevel=None):
