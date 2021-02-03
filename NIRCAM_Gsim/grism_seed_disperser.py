@@ -190,7 +190,7 @@ class Grism_seed():
         if tofits!=None:
             self.saveSingleFits(tofits)
 
-    def finalize(self,tofits=None,Back=None,BackLevel=None):
+    def finalize(self,Back=None,BackLevel=None,tofits=None):
         """ Produces a 2D dispersed image and add the appropriate background
 
         Parameters
@@ -219,6 +219,14 @@ class Grism_seed():
             # Use a passed background as is
             final = Back
 
+        if tofits!=None:
+            # Save the background image to a fits file
+            hprime = fits.PrimaryHDU()
+            himg = fits.ImageHDU(final)
+            himg.header['EXTNAME'] = 'BACKGRND'
+            himg.header['UNITS'] = 'e/s'
+            hlist = fits.HDUList([hprime, himg])
+            hlist.writeto(self.background_image_filename, overwrite=True)
 
         for order in self.orders:
             print("Adding contribution from order ",order)
@@ -229,8 +237,8 @@ class Grism_seed():
                 continue
             final = final + sim
         self.final = final  
-        if tofits!=None:
-            self.saveSingleFits(tofits)
+        
+
 
     def saveSingleFits(self,name):
         """A helper function to write the 2D simulated imae into a fits file
