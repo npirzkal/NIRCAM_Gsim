@@ -207,16 +207,21 @@ class Grism_seed():
         # Initialize final image with the background estimate
         if (Back is None) and (BackLevel is not None):
             # Use pre-computed background from config file, scaled by BackLevel
+            bck_file = grismconf(self.config).BCK
+            print("Adding pre-computed 2D dispersed background ",bck_file,"scaled to",BackLevel)
             import grismconf
-            final = fits.open(grismconf(self.config).BCK)[1].data * BackLevel
+            final = fits.open(bck_file)[1].data * BackLevel
         if (Back is None) and (BackLevel is None):
             # Use no background
+            print("No background added")
             final = 0.
         if (type(Back)==np.ndarray) and (BackLevel is not None):
             # Use a passed background and scale its median to BackLevel
+            print("adding passed background array scaled to",BackLevel)
             final = Back/np.median(Back) * BackLevel
         if (type(Back)==np.ndarray) and (BackLevel is None):
             # Use a passed background as is
+            print("adding passed background array as is")
             final = Back
 
         if tofits!=None:
