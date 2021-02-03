@@ -132,13 +132,10 @@ class Grism_seed():
             else:
                 self.this_one[order].disperse_all(cache=cache)
 
-    def disperse_background_1D(self,background,force=False):
+    def disperse_background_1D(self,background):
         """Produces a dispersed 2D image of the background spectrum contained in the fits file background, meant to be the 
         output of thr jwst_background module. This background is dispersed either in the row or column direction, depending on the 
         dispersion, and the result is tiled to produce a full 2D image. All orders are generated and added up.
-        If self.BCK is not None and force is set to False then the content of the file pointed to by self.BCK is loaded and returned
-        instead of doing a quick approximate 1D dispersion of the input spectrum. In cases where the already existing 2D dispersed 
-        background is not wanted, set force=True
 
         Parameters
         ----------
@@ -146,26 +143,19 @@ class Grism_seed():
             A 2D numpy array containing the spectrum of the background to disperse. 
             The wavelength should be in (micron) and the flux (in Mjy/sr), as is produced by 
             the jwst_background package
-        force: Force the creation of the dispersed 1D background even if a full 2D model already exists.
         output: numpy 2D array
             A 2D array containing the model background which can be fed back into finalize()
         """
 
-        import grismconf
-        C = grismconf.Config(self.config)
-        if (force is True) or (C.BCK is None):
-            bck = 0.
-            for order in self.orders:
-                print("Computing dispersed background for order ",order)
-                bck += self.this_one[order].disperse_background_1D(background) 
-        else:
-            print("Loading dispersed background from ", C.BCK)
-            bck = fits.open(C.BCK)[1].data
+        bck = 0.
+        for order in self.orders:
+            print("Computing dispersed background for order ",order)
+            bck += self.this_one[order].disperse_background_1D(background) 
 
 #        fits.writeto("WFSS_background.fits",bck,overwrite=True)
         return bck
 
-    def finalize(self,tofits=None,Back=None,BackLevel=None):
+    def finalize_OLD(self,tofits=None,Back=None,BackLevel=None):
         """ Produces a 2D dispersed image and add the appropriate background
 
         Parameters
@@ -188,6 +178,48 @@ class Grism_seed():
                 final = final/np.max(final)*BackLevel
         else:
             final = 0.
+        for order in self.orders:
+            print("Adding contribution from order ",order)
+            try:
+                sim = self.this_one[order].simulated_image[self.ystart:self.yend+1,self.xstart:self.xend+1]
+            except AttributeError:
+                print("Contribution from order",order,"is missing. Skipping it.")
+                continue
+            final = final + sim
+        self.final = final  
+        if tofits!=None:
+            self.saveSingleFits(tofits)
+
+    def finalize(self,tofits=None,Back=None,BackLevel=None):
+        """ Produces a 2D dispersed image and add the appropriate background
+
+        Parameters
+        ----------
+        tofits: str 
+            Name of a fits file to write the simulation to. Default is set to None
+        Back: str
+            Name of a fits file containing an image of the background in e-/s in extension 0
+            If None, the file listed in the config file is used.
+        BackLevel: float
+            Renormalization factor for the background image. Renormalization is done by multiplying by BackLevel/np.median(Back)
+        """
+
+        # Initialize final image with the background estimate
+        if (Back is None) and (BackLevel is not None):
+            # Use pre-computed background from config file, scaled by BackLevel
+            import grismconf
+            final = fits.open(grismconf(self.config).BCK)[1].data * BackLevel
+        if (Back is None) and (BackLevel is None):
+            # Use no background
+            final = 0.
+        if (type(Back)==np.ndarray) and (BackLevel is not None):
+            # Use a passed background and scale its median to BackLevel
+            final = Back/np.median(Back) * BackLevel
+        if (type(Back)==np.ndarray) and (BackLevel is None):
+            # Use a passed background as is
+            final = Back
+
+
         for order in self.orders:
             print("Adding contribution from order ",order)
             try:
