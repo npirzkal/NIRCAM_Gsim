@@ -342,17 +342,17 @@ class observation():
         # Find out if this an x-direction or y-direction dispersion
         dydx = np.array(C.DISPXY(self.order,1000,1000,1))-np.array(C.DISPXY(self.order,1000,1000,0))
         if np.abs(dydx[0])>np.abs(dydx[1]):
-            print("disperse_background_1D: x-direction")
+            #print("disperse_background_1D: x-direction")
             direction = "x"
             xs = np.arange(self.C.XRANGE[self.order][0]+0,self.C.XRANGE[self.order][1]+naxis[0])
             ys = np.zeros(np.shape(xs))+ypos
         else:
-            print("disperse_background_1D: y-direction")
+            #print("disperse_background_1D: y-direction")
             direction = "y"
             ys = np.arange(self.C.YRANGE[self.order][0]+0,self.C.YRANGE[self.order][1]+naxis[0])
             xs = np.zeros(np.shape(ys))+xpos
 
-        print(xpos,ypos)
+        #print(xpos,ypos)
         
         
         lam = background[0]

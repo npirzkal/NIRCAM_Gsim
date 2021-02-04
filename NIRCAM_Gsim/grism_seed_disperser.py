@@ -207,7 +207,8 @@ class Grism_seed():
         # Initialize final image with the background estimate
         if (Back is None) and (BackLevel is not None):
             # Use pre-computed background from config file, scaled by BackLevel
-            bck_file = grismconf(self.config).BCK
+            import grismconf
+            bck_file = grismconf.Config(self.config).BCK
             print("Adding pre-computed 2D dispersed background ",bck_file,"scaled to",BackLevel)
             import grismconf
             final = fits.open(bck_file)[1].data * BackLevel
@@ -230,8 +231,10 @@ class Grism_seed():
             himg = fits.ImageHDU(final)
             himg.header['EXTNAME'] = 'BACKGRND'
             himg.header['UNITS'] = 'e/s'
+            if BackLevel is not None:
+                himg.header['BackLevel'] = BackLevel
             hlist = fits.HDUList([hprime, himg])
-            hlist.writeto(self.background_image_filename, overwrite=True)
+            hlist.writeto(tofits, overwrite=True)
 
         for order in self.orders:
             print("Adding contribution from order ",order)
