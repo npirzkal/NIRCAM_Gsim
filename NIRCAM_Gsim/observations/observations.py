@@ -94,10 +94,14 @@ class observation():
                     print("Loading extra optical element transmission curves from POM file")
                     self.POM_transmission = {}
                     for i in range(2,len(fin)):
-                        w = fin[i].data["Wavelength"]
-                        t = fin[i].data["Transmission"]
-                        indx = int(fin[i].header["POMINDX"])
-                        self.POM_transmission[indx] = interp1d_picklable(w,t,bounds_error=False,fill_value=0.)
+                        try:
+                            w = fin[i].data["Wavelength"]
+                            t = fin[i].data["Transmission"]
+                            indx = int(fin[i].header["POMINDX"])
+                            self.POM_transmission[indx] = interp1d_picklable(w,t,bounds_error=False,fill_value=0.)
+                            print("Loading extra optical element transmission curves from POM file extension {}".format(i))
+                        except:
+                            pass
 
         if len(boundaries)!=4:           
             xpad = (np.shape(segmentation_data)[1]-self.C.NAXIS[0])//2
@@ -481,7 +485,7 @@ class observation():
                     POM_value = self.POM_mask[self.ys[c][i],self.xs[c][i]]
                 else:
                     POM_value = 1.
-                if POM_value>1:
+                if POM_value>10000:
                     #print("Applying additional transmission of :",self.xs[c][i],self.ys[c][i],POM_value)
                     trans = self.POM_transmission[POM_value](lams)
                     flxs = flxs * trans
