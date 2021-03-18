@@ -91,7 +91,6 @@ class observation():
                 self.Pyend = int(fin[1].header["NOMYEND"])
 
                 if len(fin)>2:
-                    print("Loading extra optical element transmission curves from POM file")
                     self.POM_transmission = {}
                     for i in range(2,len(fin)):
                         try:
@@ -198,7 +197,9 @@ class observation():
             #print("POM size:",np.shape(POM))
             #print("seg size:",np.shape(self.seg))
             #fits.writeto("seg_org.fits",self.seg,overwrite=True)
-            self.seg = self.seg * self.POM_mask01 
+            mask = np.zeros(np.shape(self.POM_mask01),np.int)
+            mask[self.POM_mask01>0] = 1
+            self.seg = self.seg * mask
             #fits.writeto("POM_msk.fits",self.POM_mask,overwrite=True)
             #fits.writeto("POM.fits",self.POM_mask01 ,overwrite=True)
             #fits.writeto("seg_msk.fits",self.seg,overwrite=True)
@@ -271,7 +272,7 @@ class observation():
                         if sum_seg!=0.:
                             d[vg] = d[vg]/sum_seg
                     else:
-                        print("not renormlazing sources to unity")
+                        print("not re-normalizing sources to unity")
 
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):
