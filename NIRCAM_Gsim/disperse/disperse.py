@@ -75,11 +75,15 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
     dw = np.abs((wmax-wmin)/(dx1-dx0))
 
     # Use a natural wavelength scale or the wavelength scale of the input SED/spectrum, whichever is smaller, divided by oversampling requested
-    input_dlam = np.median(f0[0][1:]-f0[0][:-1])
-    if input_dlam<dw:
-        dlam = input_dlam/oversample_factor
+    if len(f0[0])>1:
+        input_dlam = np.median(f0[0][1:]-f0[0][:-1])
+        if input_dlam<dw:
+            dlam = input_dlam/oversample_factor
+        else:
+            dlam = dw/oversample_factor
     else:
         dlam = dw/oversample_factor
+    
 
     lambdas = np.arange(wmin,wmax+dlam,dlam)
 

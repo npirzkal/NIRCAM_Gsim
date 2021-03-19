@@ -36,7 +36,7 @@ class Grism_seed():
             An integer containing the number of CPU to use in the multiheaded pool when dispersing
         SBE_save: str
             A string containing the name of an output HDF5 file which will contain simulated 2D stamps of each source
-        renormalize: vol
+        renormalize: bol
             Whether to renormalize the input data to unity over segmentation map area when using an input spectrum.
         Methods
         -------
