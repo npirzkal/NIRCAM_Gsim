@@ -13,7 +13,7 @@ import observation as Gsim_observation
 from multiprocessing import cpu_count 
     
 class Grism_seed():
-    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=None, SBE_save=None, renormalize=True):
+    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=None, SBE_save=None, renormalize=True, resample=False):
         """A class for a grism simulation
 
         Attributes
@@ -38,6 +38,8 @@ class Grism_seed():
             A string containing the name of an output HDF5 file which will contain simulated 2D stamps of each source
         renormalize: bol
             Whether to renormalize the input data to unity over segmentation map area when using an input spectrum.
+        reaample: bol
+            If true, the disperser will first smooth and resample input spectra appropriately to match the disperser resolution.
         Methods
         -------
         observation(self,orders=["+1","+2"],max_split=-1000,ID=0)
@@ -80,6 +82,7 @@ class Grism_seed():
         self.extrapolate_SED = extrapolate_SED
         self.SED_file = SED_file
         self.renormalize = renormalize
+        self.resample = resample
 
     def observation(self,orders=None,max_split=-1000,ID=0):
         """Sets up an observation.
@@ -108,7 +111,7 @@ class Grism_seed():
             
         for order in self.orders:
             boundaries = [self.xstart,self.xend,self.ystart,self.yend]
-            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize)
+            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize,resample=self.resample)
             #self.this_one[order].disperse_all()
 
     def disperse(self,orders=None,cache=False,trans=None):
@@ -154,41 +157,6 @@ class Grism_seed():
 
 #        fits.writeto("WFSS_background.fits",bck,overwrite=True)
         return bck
-
-    def finalize_OLD(self,tofits=None,Back=None,BackLevel=None):
-        """ Produces a 2D dispersed image and add the appropriate background
-
-        Parameters
-        ----------
-        tofits: str 
-            Name of a fits file to write the simulation to. Default is set to None
-        Back: str
-            Name of a fits file containing an image of the background in e-/s in extension 0
-        BackLevel: float
-            Renormalization factor for the background image. Renormalization is done by multiplying by BackLevel/np.max(Back)
-        """
-
-        if Back is not None:
-            if type(Back)==np.ndarray:
-                final = Back
-            else:
-                with fits.open(os.path.join(self.config_path,Back)) as fin:
-                    final = fin[-1].data
-            if BackLevel!=None:
-                final = final/np.max(final)*BackLevel
-        else:
-            final = 0.
-        for order in self.orders:
-            print("Adding contribution from order ",order)
-            try:
-                sim = self.this_one[order].simulated_image[self.ystart:self.yend+1,self.xstart:self.xend+1]
-            except AttributeError:
-                print("Contribution from order",order,"is missing. Skipping it.")
-                continue
-            final = final + sim
-        self.final = final  
-        if tofits!=None:
-            self.saveSingleFits(tofits)
 
     def finalize(self,Back=None,BackLevel=None,tofits=None):
         """ Produces a 2D dispersed image and add the appropriate background

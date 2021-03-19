@@ -45,7 +45,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[], renormalize=True):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -79,6 +79,7 @@ class observation():
         self.POM_mask = None
         self.POM_mask01 = None
         self.renormalize = renormalize
+        self.resample = resample
         if self.C.POM is not None:
             print("Using POM mask",self.C.POM)
             with fits.open(self.C.POM) as fin:
@@ -424,6 +425,20 @@ class observation():
 
         return bck
 
+    def smooth(self,w,f,dw=0.002):
+        from scipy.interpolate import interp1d
+        from astropy.convolution import Gaussian1DKernel
+        from astropy.convolution import convolve
+        fct = interp1d(w,f)
+        xs = np.arange(np.min(w),np.max(w),1./10000)
+        ys = fct(xs)
+        kernel = Gaussian1DKernel(stddev=dw)
+        conv = convolve(ys,kernel)
+        fct2 = interp1d(xs,conv)
+        xs2 = np.arange(np.min(xs),np.max(xs),dw)
+        ys2 = fct2(xs2)
+        return xs2,ys2
+
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
         from multiprocessing import Pool
@@ -437,19 +452,50 @@ class observation():
                 ID = int(self.seg[self.ys[c][0],self.xs[c][0]])
 
                 tmp = h5f["%s" % (ID)][:]
+
+                if self.resample:
+                    
+
+                    # Figuring out a few things about size of order, dispersion and wavelengths to use    
+                    wmin = self.C.WRANGE[self.order][0]
+                    wmax = self.C.WRANGE[self.order][1]
+
+                    t0 = self.C.INVDISPL(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,wmin)
+                    t1 = self.C.INVDISPL(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,wmax)
+                    
+                    dx0 = self.C.DISPX(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t0) - self.C.DISPX(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t1)
+                    dx1 = self.C.DISPY(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t0) - self.C.DISPY(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t1)
+
+                    dw = np.abs((wmax-wmin)/(dx1-dx0))
+                    print("Smoothing and resampling input spectrum to {} micron".format(dw))
+                    # print("self.SED_file:",self.SED_file)
+                    # print("lams:",tmp[0])
+                    # print(tmp[0][1:]-tmp[0][:-1])
+                    # print("DW:",dw)
+
+                    tmp = self.smooth(tmp[0],tmp[1],dw/1.5)
+                    #print(len(tmp[0]),len(tmp[1]))
+                    
+                
+                ok = (tmp[0]>self.C.WRANGE[self.order][0]) & (tmp[0]<self.C.WRANGE[self.order][1])                        
+                tmp = [tmp[0][ok],tmp[1][ok]]
+
                 for i in range(len(self.xs[c])):
                     
                     lams = tmp[0]
                     fffs = tmp[1]*self.fs["SED"][c][i]
-
+   
                     # trim input spectrum 
-                    try:
-                        ok = (lams>self.C.WRANGE["+1"][0]) & (lams<self.C.WRANGE["+1"][1])
-                    except:
-                        ok = (lams>self.C.WRANGE["A"][0]) & (lams<self.C.WRANGE["A"][1])
-                    lams = lams[ok]
-                    fffs = fffs[ok]
+                    # try:
+                    #     ok = (lams>self.C.WRANGE["+1"][0]) & (lams<self.C.WRANGE["+1"][1])
+                    # except:
+                    #     ok = (lams>self.C.WRANGE["A"][0]) & (lams<self.C.WRANGE["A"][1])
 
+                    # ok = (lams>self.C.WRANGE[self.order][0]) & (lams<self.C.WRANGE[self.order][1])                        
+                    # lams = lams[ok]
+                    # fffs = fffs[ok]
+                    #print(len(lams))
+                    #sys.exit(1)
                     if self.POM_mask is not None:
                         POM_value = self.POM_mask[self.ys[c][i],self.xs[c][i]]
                     else:
