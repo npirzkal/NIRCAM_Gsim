@@ -265,15 +265,17 @@ class observation():
                 for ID in self.IDs:
                     vg = self.seg==ID
                     dnew = d
-                    if self.POM_mask01 is not None:
-                        #print("Applying POM transmission to data")
-                        dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels. This is a single grey correction for the whole object.
+                    
                     if self.renormalize is True:
-                        sum_seg = np.sum(d[vg]) # But normalize by the whole flux
+                        sum_seg = np.sum(dnew[vg]) # But normalize by the whole flux
                         if sum_seg!=0.:
-                            d[vg] = d[vg]/sum_seg
+                            dnew[vg] = dnew[vg]/sum_seg
                     else:
                         print("not re-normalizing sources to unity")
+
+                    if self.POM_mask01 is not None:
+                        #print("Applying POM transmission to data")
+                        dnew = dnew * self.POM_mask01 # Apply POM transmission mask to the data pixels. This is a single grey correction for the whole object.
 
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):
