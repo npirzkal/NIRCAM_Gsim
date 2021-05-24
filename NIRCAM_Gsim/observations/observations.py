@@ -547,9 +547,9 @@ class observation():
 
 
         time1 = time.time()
-        mypool = Pool(self.max_cpu) # Create pool
-        all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
-        mypool.close() # No more work
+        with Pool(self.max_cpu) as mypool:
+            all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
+            mypool.close() # No more work
 
         this_object = np.zeros(self.dims,np.float)
 
