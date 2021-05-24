@@ -33,14 +33,14 @@ class interp1d_picklable(object):
 def comprehension_flatten( aList ):
         return list(y for x in aList for y in x)
 
-def helper(vars):
-    x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset = vars # in this case ID is dummy number
-    p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset)
-    xs, ys, areas, lams, counts,ID = p
-    IDs = [ID] * len(xs)
+# def helper(vars):
+#     x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset = vars # in this case ID is dummy number
+#     p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset)
+#     xs, ys, areas, lams, counts,ID = p
+#     IDs = [ID] * len(xs)
 
-    pp = np.array([xs, ys, areas, lams, counts,IDs])
-    return pp
+#     pp = np.array([xs, ys, areas, lams, counts,IDs])
+#     return pp
 
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
@@ -547,8 +547,9 @@ class observation():
 
 
         time1 = time.time()
+        import helper
         with Pool(self.max_cpu) as mypool:
-            all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
+            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
             mypool.close() # No more work
 
         this_object = np.zeros(self.dims,np.float)
