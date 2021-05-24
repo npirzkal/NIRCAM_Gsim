@@ -10,6 +10,7 @@ from ..disperse.disperse import dispersed_pixel
 import h5py
 import tqdm
 from scipy.interpolate import interp1d
+import platform
 
 class interp1d_picklable(object):
     """ class wrapper for piecewise linear function
@@ -385,14 +386,19 @@ class observation():
             pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart])
 
 
-        from multiprocessing import Pool
-        import time
-        import helper
-        time1 = time.time()
+        python_version = int(platform.python_version_tuple()[1])
+        if python_version<8:
+	        from multiprocessing import Pool
+	        import time
+	        import helper
+	        time1 = time.time()
 
-        with Pool(self.max_cpu) as mypool: # Create pool
-            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
-            mypool.close()
+	        with Pool(self.max_cpu) as mypool: # Create pool
+	            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
+	            mypool.close()
+	    else:
+	    	with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
+            	all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
 
         bck = np.zeros(naxis,np.float)
         for i,pp in enumerate(all_res, 1): 
@@ -550,9 +556,15 @@ class observation():
 
         time1 = time.time()
         import helper
-        with Pool(self.max_cpu) as mypool:
-            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
-            mypool.close() # No more work
+
+        python_version = int(platform.python_version_tuple()[1])
+        if python_version<8:
+	        with Pool(self.max_cpu) as mypool:
+	            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
+	            mypool.close() # No more work
+	    else:
+	    	with multiprocessing.Pool(self.max_cpu) as mypool:
+            	all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
 
         this_object = np.zeros(self.dims,np.float)
 
