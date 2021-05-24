@@ -10,6 +10,10 @@ from ..disperse.disperse import dispersed_pixel
 import h5py
 import tqdm
 from scipy.interpolate import interp1d
+import time
+import multiprocessing
+multiprocessing.set_start_method("fork")
+from NIRCAM_Gsim.observations.helper import helper
 
 class interp1d_picklable(object):
     """ class wrapper for piecewise linear function
@@ -44,7 +48,7 @@ def comprehension_flatten( aList ):
 
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
-    
+
     def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
@@ -58,7 +62,7 @@ class observation():
         """
 
         self.C = grismconf.Config(config)
-            
+
         if plot:
             import matplotlib.pyplot as plt
             plt.ion()
@@ -103,7 +107,7 @@ class observation():
                         except:
                             pass
 
-        if len(boundaries)!=4:           
+        if len(boundaries)!=4:
             xpad = (np.shape(segmentation_data)[1]-self.C.NAXIS[0])//2
             ypad = (np.shape(segmentation_data)[0]-self.C.NAXIS[1])//2
             self.xstart = 0 + xpad
@@ -114,14 +118,14 @@ class observation():
         else:
             self.xstart,self.xend,self.ystart,self.yend = boundaries
 
-        
+
         self.extrapolate_SED = extrapolate_SED # Allow for SED extrapolation
         if self.extrapolate_SED:
             print("Warning: SED Extrapolation turned on.")
 
         self.apply_POM()
         self.create_pixel_list()
-        
+
         self.p_l = []
         self.p_a = []
 
@@ -175,7 +179,7 @@ class observation():
                 print("seg map detector FOV starts at {} {}".format(self.xstart,self.ystart))
                 print("POM mask detector FOV starts at {} {}".format(self.Pxstart,self.Pystart))
                 raise Exception("Invalid seg map size.")
- 
+
             POM = np.zeros(np.shape(self.seg))
             POM[yoff:yoff+ys1,xoff:xoff+xs1] = self.POM_mask
             self.POM_mask = POM*1
@@ -190,9 +194,9 @@ class observation():
             self.Pystart  = self.ystart
             self.Pyend  = self.ystart
 
-            # We apply the POM mask to the seg file, but only as a mask, romving pixels getting no lights. We keep the POM mask with its orginal values otherwise 
+            # We apply the POM mask to the seg file, but only as a mask, romving pixels getting no lights. We keep the POM mask with its orginal values otherwise
             # to be able to account for partial transmission later on.
-    
+
 
             from astropy.io import fits
             #print("POM size:",np.shape(POM))
@@ -223,9 +227,9 @@ class observation():
                     self.IDs = all_IDs
         else:
             vg = self.seg==self.ID
-            ys,xs = np.nonzero(vg)            
-           
-            if (len(xs)>0) & (len(ys)>0):    
+            ys,xs = np.nonzero(vg)
+
+            if (len(xs)>0) & (len(ys)>0):
                 self.xs.append(xs)
                 self.ys.append(ys)
                 self.IDs = [self.ID]
@@ -261,11 +265,11 @@ class observation():
                 for i in range(len(self.IDs)):
                     self.fs[l].append(dnew[self.ys[i],self.xs[i]] * photflam)
             else:
-                # Need to normalize the object stamps              
+                # Need to normalize the object stamps
                 for ID in self.IDs:
                     vg = self.seg==ID
                     dnew = d
-                    
+
                     if self.renormalize is True:
                         sum_seg = np.sum(dnew[vg]) # But normalize by the whole flux
                         if sum_seg!=0.:
@@ -280,7 +284,7 @@ class observation():
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):
                     self.fs["SED"].append(dnew[self.ys[i],self.xs[i]])
-    
+
     def disperse_all(self,cache=False):
 
         if cache:
@@ -308,14 +312,14 @@ class observation():
                 # If SBE_save is enabled, we create an HDF5 file containing the stamp of this simulated object
                 # order is in self.order
                 # We just save the x,y,f,w arrays as well as info about minx,maxx,miny,maxy
-    
+
                 # We trim the stamp to avoid padding area
                 this_SBE_object =  this_object[self.ystart:self.yend+1,self.xstart:self.xend+1]
-                
+
                 yss,xss = np.nonzero(this_SBE_object>0)
-                
+
                 if len(xss)<1:
-                    continue 
+                    continue
 
                 minx = np.min(xss)
                 maxx = np.max(xss)
@@ -344,7 +348,7 @@ class observation():
 
         # Create a fake object, line in middle of detector
         C = self.C
-        naxis = [self.xend-self.xstart+1 ,self.yend-self.ystart+1] 
+        naxis = [self.xend-self.xstart+1 ,self.yend-self.ystart+1]
         xpos,ypos = naxis[0]//2,naxis[1]//2
 
         # Find out if this an x-direction or y-direction dispersion
@@ -361,8 +365,8 @@ class observation():
             xs = np.zeros(np.shape(ys))+xpos
 
         #print(xpos,ypos)
-        
-        
+
+
         lam = background[0]
         fnu = background[1]
 
@@ -376,56 +380,48 @@ class observation():
         flam = fnu/(wa**2/c)
 
         f = [lam,flam]
-                
-        pars = []        
+
+        pars = []
         for i in range(len(xs)):
             ID = 1
             xs0 = [xs[i],xs[i]+1,xs[i]+1,xs[i]]
             ys0 = [ys[i],ys[i],ys[i]+1,ys[i]+1]
             pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart])
 
-
-        from multiprocessing import Pool
-        import time
-        import helper
         time1 = time.time()
 
-        with Pool(self.max_cpu) as mypool: # Create pool
-            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
-            mypool.close()
+        with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
+            all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
 
-        bck = np.zeros(naxis,np.float)
-        for i,pp in enumerate(all_res, 1): 
-            if np.shape(pp.transpose())==(1,6):
-                continue
-            x,y,w,f = pp[0],pp[1],pp[3],pp[4]
+            bck = np.zeros(naxis,np.float)
+            for i,pp in enumerate(all_res, 1):
+                if np.shape(pp.transpose())==(1,6):
+                    continue
+                x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
+                vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1])
 
-            vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1]) 
+                x = x[vg]
+                y = y[vg]
+                f = f[vg]
+                w = w[vg]
 
-            x = x[vg]
-            y = y[vg]
-            f = f[vg]
-            w = w[vg]
-            
-            if len(x)<1:
-                continue
+                if len(x)<1:
+                    continue
 
-            
+                minx = int(min(x))
+                maxx = int(max(x))
+                miny = int(min(y))
+                maxy = int(max(y))
+                a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+                bck[miny:maxy+1,minx:maxx+1] = bck[miny:maxy+1,minx:maxx+1] + a
 
-            minx = int(min(x))
-            maxx = int(max(x))
-            miny = int(min(y))
-            maxy = int(max(y))
-            a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
-            bck[miny:maxy+1,minx:maxx+1] = bck[miny:maxy+1,minx:maxx+1] + a
-
-        if direction=="x":
-            bck = np.sum(bck,axis=0)
-            bck = np.tile(bck,[naxis[1],1])
-        else:
-            bck = np.sum(bck,axis=1)
-            bck = np.tile(bck,[naxis[0],1]).transpose()
+            if direction=="x":
+                bck = np.sum(bck,axis=0)
+                bck = np.tile(bck,[naxis[1],1])
+            else:
+                bck = np.sum(bck,axis=1)
+                bck = np.tile(bck,[naxis[0],1]).transpose()
 
         return bck
 
@@ -445,9 +441,6 @@ class observation():
 
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
-        from multiprocessing import Pool
-        import time
-
         if self.SED_file!=None:
             # We use an input spectrum file
             import h5py
@@ -458,15 +451,15 @@ class observation():
                 tmp = h5f["%s" % (ID)][:]
 
                 if self.resample:
-                    
 
-                    # Figuring out a few things about size of order, dispersion and wavelengths to use    
+
+                    # Figuring out a few things about size of order, dispersion and wavelengths to use
                     wmin = self.C.WRANGE[self.order][0]
                     wmax = self.C.WRANGE[self.order][1]
 
                     t0 = self.C.INVDISPL(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,wmin)
                     t1 = self.C.INVDISPL(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,wmax)
-                    
+
                     dx0 = self.C.DISPX(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t0) - self.C.DISPX(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t1)
                     dx1 = self.C.DISPY(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t0) - self.C.DISPY(self.order,self.C.NAXIS[0]/2,self.C.NAXIS[1]/2,t1)
 
@@ -479,23 +472,23 @@ class observation():
 
                     tmp = self.smooth(tmp[0],tmp[1],dw/1.5)
                     #print(len(tmp[0]),len(tmp[1]))
-                    
-                
-                ok = (tmp[0]>self.C.WRANGE[self.order][0]) & (tmp[0]<self.C.WRANGE[self.order][1])                        
+
+
+                ok = (tmp[0]>self.C.WRANGE[self.order][0]) & (tmp[0]<self.C.WRANGE[self.order][1])
                 tmp = [tmp[0][ok],tmp[1][ok]]
 
                 for i in range(len(self.xs[c])):
-                    
+
                     lams = tmp[0]
                     fffs = tmp[1]*self.fs["SED"][c][i]
-   
-                    # trim input spectrum 
+
+                    # trim input spectrum
                     # try:
                     #     ok = (lams>self.C.WRANGE["+1"][0]) & (lams<self.C.WRANGE["+1"][1])
                     # except:
                     #     ok = (lams>self.C.WRANGE["A"][0]) & (lams<self.C.WRANGE["A"][1])
 
-                    # ok = (lams>self.C.WRANGE[self.order][0]) & (lams<self.C.WRANGE[self.order][1])                        
+                    # ok = (lams>self.C.WRANGE[self.order][0]) & (lams<self.C.WRANGE[self.order][1])
                     # lams = lams[ok]
                     # fffs = fffs[ok]
                     #print(len(lams))
@@ -547,51 +540,46 @@ class observation():
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
 
 
-
         time1 = time.time()
-        import helper
-        with Pool(self.max_cpu) as mypool:
-            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
-            mypool.close() # No more work
+        with multiprocessing.Pool(self.max_cpu) as mypool:
+            all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
 
-        this_object = np.zeros(self.dims,np.float)
+            this_object = np.zeros(self.dims,np.float)
 
-        for i,pp in enumerate(all_res, 1): 
+            for i,pp in enumerate(all_res, 1):
 
-            if np.shape(pp.transpose())==(1,6):
-                continue
+                if np.shape(pp.transpose())==(1,6):
+                    continue
 
-            x,y,w,f = pp[0],pp[1],pp[3],pp[4]
+                x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
-            vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
+                vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0])
 
-            x = x[vg]
-            y = y[vg]
-            f = f[vg]
-            w = w[vg]
-            
-            if len(x)<1:
-                continue
+                x = x[vg]
+                y = y[vg]
+                f = f[vg]
+                w = w[vg]
 
-            
+                if len(x)<1:
+                    continue
 
-            minx = int(min(x))
-            maxx = int(max(x))
-            miny = int(min(y))
-            maxy = int(max(y))
-            a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
-            self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
-            this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
+                minx = int(min(x))
+                maxx = int(max(x))
+                miny = int(min(y))
+                maxy = int(max(y))
+                a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+                self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
+                this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
 
-            if self.cache:
-                self.cached_object[c]['x'].append(x)
-                self.cached_object[c]['y'].append(y)
-                self.cached_object[c]['f'].append(f)
-                self.cached_object[c]['w'].append(w)
-                self.cached_object[c]['minx'].append(minx)
-                self.cached_object[c]['maxx'].append(maxx)
-                self.cached_object[c]['miny'].append(miny)
-                self.cached_object[c]['maxy'].append(maxy)
+                if self.cache:
+                    self.cached_object[c]['x'].append(x)
+                    self.cached_object[c]['y'].append(y)
+                    self.cached_object[c]['f'].append(f)
+                    self.cached_object[c]['w'].append(w)
+                    self.cached_object[c]['minx'].append(minx)
+                    self.cached_object[c]['maxx'].append(maxx)
+                    self.cached_object[c]['miny'].append(miny)
+                    self.cached_object[c]['maxy'].append(maxy)
 
 
 
@@ -612,7 +600,7 @@ class observation():
 
     def disperse_chunk_from_cache(self,c,trans=None):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
-        
+
         import time
 
         if not self.cache:
@@ -620,12 +608,12 @@ class observation():
             return
 
         time1 = time.time()
-        
+
         this_object = np.zeros(self.dims,np.float)
 
         if trans!=None:
                 print("Applying a transmission function...")
-        for i in range(len(self.cached_object[c]['x'])): 
+        for i in range(len(self.cached_object[c]['x'])):
             x = self.cached_object[c]['x'][i]
             y = self.cached_object[c]['y'][i]
             f = self.cached_object[c]['f'][i]*1.
@@ -638,7 +626,7 @@ class observation():
             maxx = self.cached_object[c]['maxx'][i]
             miny = self.cached_object[c]['miny'][i]
             maxy = self.cached_object[c]['maxy'][i]
-   
+
             a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
             self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
             this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
