@@ -387,10 +387,12 @@ class observation():
 
         from multiprocessing import Pool
         import time
+        import helper
         time1 = time.time()
-        mypool = Pool(self.max_cpu) # Create pool
-        all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
-        mypool.close()
+
+        with Pool(self.max_cpu) as mypool: # Create pool
+            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
+            mypool.close()
 
         bck = np.zeros(naxis,np.float)
         for i,pp in enumerate(all_res, 1): 
