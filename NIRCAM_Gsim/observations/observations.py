@@ -59,6 +59,7 @@ class observation():
         boundaries: a tuple containing the coordinates of the FOV within the larger seed image.
         """
 
+        print("Loading grism configuration file:",config)
         self.C = grismconf.Config(config)
             
         if plot:
