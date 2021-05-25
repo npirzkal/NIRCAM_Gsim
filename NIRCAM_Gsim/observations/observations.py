@@ -10,7 +10,8 @@ from ..disperse.disperse import dispersed_pixel
 import h5py
 import tqdm
 from scipy.interpolate import interp1d
-import platform
+import platform, ray
+import multiprocessing
 
 class interp1d_picklable(object):
     """ class wrapper for piecewise linear function
@@ -34,14 +35,15 @@ class interp1d_picklable(object):
 def comprehension_flatten( aList ):
         return list(y for x in aList for y in x)
 
-# def helper(vars):
-#     x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset = vars # in this case ID is dummy number
-#     p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset)
-#     xs, ys, areas, lams, counts,ID = p
-#     IDs = [ID] * len(xs)
+# @ray.remote
+def helper(vars):
+    x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset = vars # in this case ID is dummy number
+    p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset)
+    xs, ys, areas, lams, counts,ID = p
+    IDs = [ID] * len(xs)
 
-#     pp = np.array([xs, ys, areas, lams, counts,IDs])
-#     return pp
+    pp = np.array([xs, ys, areas, lams, counts,IDs])
+    return pp
 
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
@@ -386,45 +388,28 @@ class observation():
             pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart])
 
 
-        python_version = int(platform.python_version_tuple()[1])
-        if python_version<8:
-	        from multiprocessing import Pool
-	        import time
-	        import helper
-	        time1 = time.time()
+        with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
+            for pp in mypool.imap_unordered(helper, pars):
+                if np.shape(pp.transpose())==(1,6):
+                    continue
+                x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
-	        with Pool(self.max_cpu) as mypool: # Create pool
-	            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
-	            mypool.close()
-	    else:
-	    	with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
-            	all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
+                vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1]) 
 
-        bck = np.zeros(naxis,np.float)
-        for i,pp in enumerate(all_res, 1): 
-            if np.shape(pp.transpose())==(1,6):
-                continue
-            x,y,w,f = pp[0],pp[1],pp[3],pp[4]
+                x = x[vg]
+                y = y[vg]
+                f = f[vg]
+                w = w[vg]
+                
+                if len(x)<1:
+                    continue
 
-
-            vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1]) 
-
-            x = x[vg]
-            y = y[vg]
-            f = f[vg]
-            w = w[vg]
-            
-            if len(x)<1:
-                continue
-
-            
-
-            minx = int(min(x))
-            maxx = int(max(x))
-            miny = int(min(y))
-            maxy = int(max(y))
-            a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
-            bck[miny:maxy+1,minx:maxx+1] = bck[miny:maxy+1,minx:maxx+1] + a
+                minx = int(min(x))
+                maxx = int(max(x))
+                miny = int(min(y))
+                maxy = int(max(y))
+                a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+                bck[miny:maxy+1,minx:maxx+1] = bck[miny:maxy+1,minx:maxx+1] + a
 
         if direction=="x":
             bck = np.sum(bck,axis=0)
@@ -555,57 +540,43 @@ class observation():
 
 
         time1 = time.time()
-        import helper
-
-        python_version = int(platform.python_version_tuple()[1])
-        if python_version<8:
-	        with Pool(self.max_cpu) as mypool:
-	            all_res = mypool.imap_unordered(helper.helper,pars) # Stuff the pool
-	            mypool.close() # No more work
-	    else:
-	    	with multiprocessing.Pool(self.max_cpu) as mypool:
-            	all_res = mypool.imap_unordered(helper,pars) # Stuff the pool
 
         this_object = np.zeros(self.dims,np.float)
 
-        for i,pp in enumerate(all_res, 1): 
+        with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
+            for pp in mypool.imap_unordered(helper, pars, chunksize=10):
+                if np.shape(pp.transpose())==(1,6):
+                    continue
+                x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
-            if np.shape(pp.transpose())==(1,6):
-                continue
+                vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
 
-            x,y,w,f = pp[0],pp[1],pp[3],pp[4]
-
-            vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
-
-            x = x[vg]
-            y = y[vg]
-            f = f[vg]
-            w = w[vg]
-            
-            if len(x)<1:
-                continue
-
-            
-
-            minx = int(min(x))
-            maxx = int(max(x))
-            miny = int(min(y))
-            maxy = int(max(y))
-            a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
-            self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
-            this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
-
-            if self.cache:
-                self.cached_object[c]['x'].append(x)
-                self.cached_object[c]['y'].append(y)
-                self.cached_object[c]['f'].append(f)
-                self.cached_object[c]['w'].append(w)
-                self.cached_object[c]['minx'].append(minx)
-                self.cached_object[c]['maxx'].append(maxx)
-                self.cached_object[c]['miny'].append(miny)
-                self.cached_object[c]['maxy'].append(maxy)
+                x = x[vg]
+                y = y[vg]
+                f = f[vg]
+                w = w[vg]
+                
+                if len(x)<1:
+                    continue
 
 
+                minx = int(min(x))
+                maxx = int(max(x))
+                miny = int(min(y))
+                maxy = int(max(y))
+                a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+                self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
+                this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
+
+                if self.cache:
+                    self.cached_object[c]['x'].append(x)
+                    self.cached_object[c]['y'] .append(y)
+                    self.cached_object[c]['f'].append(f)
+                    self.cached_object[c]['w'].append(w)
+                    self.cached_object[c]['minx'].append(minx)
+                    self.cached_object[c]['maxx'].append(maxx)
+                    self.cached_object[c]['miny'].append(miny)
+                    self.cached_object[c]['maxy'].append(maxy)
 
         time2 = time.time()
 
