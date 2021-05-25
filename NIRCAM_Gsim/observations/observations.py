@@ -387,6 +387,9 @@ class observation():
             ys0 = [ys[i],ys[i],ys[i]+1,ys[i]+1]
             pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart])
 
+
+        bck = np.zeros(naxis,np.float)
+
         chunksize = int(len(pars)/self.max_cpu)
 
         with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
