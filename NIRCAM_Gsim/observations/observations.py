@@ -10,7 +10,7 @@ from ..disperse.disperse import dispersed_pixel
 import h5py
 import tqdm
 from scipy.interpolate import interp1d
-import platform, ray
+import platform
 import multiprocessing
 
 class interp1d_picklable(object):
@@ -35,7 +35,6 @@ class interp1d_picklable(object):
 def comprehension_flatten( aList ):
         return list(y for x in aList for y in x)
 
-# @ray.remote
 def helper(vars):
     x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset = vars # in this case ID is dummy number
     p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset)
