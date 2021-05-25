@@ -387,9 +387,10 @@ class observation():
             ys0 = [ys[i],ys[i],ys[i]+1,ys[i]+1]
             pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart])
 
+        chunksize = int(len(pars)/self.max_cpu)
 
         with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
-            for pp in mypool.imap_unordered(helper, pars):
+            for pp in mypool.imap_unordered(helper, pars,chunksize=chunksize):
                 if np.shape(pp.transpose())==(1,6):
                     continue
                 x,y,w,f = pp[0],pp[1],pp[3],pp[4]
@@ -542,9 +543,11 @@ class observation():
         time1 = time.time()
 
         this_object = np.zeros(self.dims,np.float)
+        chunksize = int(len(pars)/self.max_cpu)
+        #print("USING ",chunksize,"chunksize!!!")
 
         with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
-            for pp in mypool.imap_unordered(helper, pars, chunksize=10):
+            for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
                 if np.shape(pp.transpose())==(1,6):
                     continue
                 x,y,w,f = pp[0],pp[1],pp[3],pp[4]
