@@ -12,6 +12,8 @@ import tqdm
 from scipy.interpolate import interp1d
 import platform
 import multiprocessing
+import ray
+
 
 class interp1d_picklable(object):
     """ class wrapper for piecewise linear function
@@ -43,6 +45,11 @@ def helper(vars):
 
     pp = np.array([xs, ys, areas, lams, counts,IDs])
     return pp
+
+@ray.remote
+def mega_helper(pars):
+    return [helper(p) for p in pars]
+
 
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
@@ -391,9 +398,19 @@ class observation():
         bck = np.zeros(naxis,np.float)
 
         chunksize = int(len(pars)/self.max_cpu)
+        print("USING Ray!!!")
+        #ray.init(self.max_cpu)
+        ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
-        with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
-            for pp in mypool.imap_unordered(helper, pars,chunksize=chunksize):
+        chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
+
+        result_ids = []
+        [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
+        results = ray.get(result_ids)
+
+        for result in results:
+            for pp in result:
+                pp = np.array(pp)
                 if np.shape(pp.transpose())==(1,6):
                     continue
                 x,y,w,f = pp[0],pp[1],pp[3],pp[4]
@@ -440,7 +457,7 @@ class observation():
 
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
-        from multiprocessing import Pool
+        #from multiprocessing import Pool
         import time
 
         if self.SED_file!=None:
@@ -547,10 +564,19 @@ class observation():
 
         this_object = np.zeros(self.dims,np.float)
         chunksize = int(len(pars)/self.max_cpu)
-        #print("USING ",chunksize,"chunksize!!!")
+        print("USING Ray!!!")
+        #ray.init(self.max_cpu)
+        ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
-        with multiprocessing.Pool(self.max_cpu) as mypool: # Create pool
-            for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
+        chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
+
+        result_ids = []
+        [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
+        results = ray.get(result_ids)
+
+        for result in results:
+            for pp in result:
+                pp = np.array(pp)
                 if np.shape(pp.transpose())==(1,6):
                     continue
                 x,y,w,f = pp[0],pp[1],pp[3],pp[4]
@@ -564,7 +590,6 @@ class observation():
                 
                 if len(x)<1:
                     continue
-
 
                 minx = int(min(x))
                 maxx = int(max(x))
