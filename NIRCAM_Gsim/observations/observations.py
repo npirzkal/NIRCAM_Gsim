@@ -54,7 +54,7 @@ def mega_helper(pars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True, multiprocessing='multiprocessing'):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -64,6 +64,7 @@ class observation():
         SED_file: Name of HDF5 file containing datasets matching the ID in the segmentation file and each consisting of a [[lambda],[flux]] array.
         SBE_save: If set to a path, HDF5 containing simulated stamps for all obsjects will be saved.
         boundaries: a tuple containing the coordinates of the FOV within the larger seed image.
+        multiprocessing: 'multiprocessing' for native Python. 'ray' to use ray.
         """
 
         print("Loading grism configuration file:",config)
@@ -90,6 +91,8 @@ class observation():
         self.POM_mask01 = None
         self.renormalize = renormalize
         self.resample = resample
+        self.multiprocessing = multiprocessing 
+
         if self.C.POM is not None:
             print("Using POM mask",self.C.POM)
             with fits.open(self.C.POM) as fin:
@@ -398,15 +401,22 @@ class observation():
         bck = np.zeros(naxis,np.float)
 
         chunksize = int(len(pars)/self.max_cpu)
-        print("USING Ray!!!")
-        #ray.init(self.max_cpu)
-        ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
-        chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
+        if self.multiprocessing=='ray':
+            ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
-        result_ids = []
-        [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
-        results = ray.get(result_ids)
+            chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
+
+            result_ids = []
+            [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
+            results = ray.get(result_ids)
+        else:
+            results = []
+            with multiprocessing.Pool(processes=self.max_cpu) as mypool:
+                for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
+                 if np.shape(pp.transpose())==(1,6):
+                     continue
+                 results.appnd(pp)
 
         for result in results:
             for pp in result:
@@ -564,16 +574,23 @@ class observation():
 
         this_object = np.zeros(self.dims,np.float)
         chunksize = int(len(pars)/self.max_cpu)
-        print("USING Ray!!!")
-        #ray.init(self.max_cpu)
-        ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
-        chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
+        if self.multiprocessing=='ray':
+            ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
-        result_ids = []
-        [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
-        results = ray.get(result_ids)
+            chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
 
+            result_ids = []
+            [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
+            results = ray.get(result_ids)
+        else:
+            results = []
+            with multiprocessing.Pool(processes=self.max_cpu) as mypool:
+                for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
+                 if np.shape(pp.transpose())==(1,6):
+                     continue
+                 results.appnd(pp)
+                 
         for result in results:
             for pp in result:
                 pp = np.array(pp)
