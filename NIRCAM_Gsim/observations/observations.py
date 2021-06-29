@@ -401,7 +401,8 @@ class observation():
         bck = np.zeros(naxis,np.float)
 
         chunksize = int(len(pars)/self.max_cpu)
-
+        if chunksize<1:
+            chunksize = 1
         if self.multiprocessing=='ray':
             ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
@@ -574,7 +575,8 @@ class observation():
 
         this_object = np.zeros(self.dims,np.float)
         chunksize = int(len(pars)/self.max_cpu)
-
+        if chunksize<1:
+            chunksize = 1
         if self.multiprocessing=='ray':
             ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
