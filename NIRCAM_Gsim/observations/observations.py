@@ -8,12 +8,12 @@ from astropy.table import Table
 #from NIRCAM_Gsim.disperse import *
 from ..disperse.disperse import dispersed_pixel
 import h5py
-import tqdm
 from scipy.interpolate import interp1d
 import platform
 import multiprocessing
-import ray
-
+#import ray
+from tqdm import tqdm
+import psutil
 
 class interp1d_picklable(object):
     """ class wrapper for piecewise linear function
@@ -46,15 +46,17 @@ def helper(vars):
     pp = np.array([xs, ys, areas, lams, counts,IDs])
     return pp
 
-@ray.remote
-def mega_helper(pars):
-    return [helper(p) for p in pars]
+
+# @ray.remote
+# def mega_helper(pars):
+#     return [helper(p) for p in pars]
+    
 
 
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=10,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True, multiprocessing='multiprocessing'):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=-1,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True, multiprocessor='multiprocessing'):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -64,8 +66,28 @@ class observation():
         SED_file: Name of HDF5 file containing datasets matching the ID in the segmentation file and each consisting of a [[lambda],[flux]] array.
         SBE_save: If set to a path, HDF5 containing simulated stamps for all obsjects will be saved.
         boundaries: a tuple containing the coordinates of the FOV within the larger seed image.
-        multiprocessing: 'multiprocessing' for native Python. 'ray' to use ray.
+        multiprocessor: 'multiprocessing' for native Python.
         """
+        print("direct_images:",direct_images)
+        #print("segmentation_data:",segmentation_data)
+        print("config:",config)
+        print("mod:",mod)
+        print("order:",order)
+        print("plot:",plot)
+        print("max_split:",max_split)
+        print("SED_file:",SED_file)
+        print("extrapolate_SED:",extrapolate_SED)
+        print("max_cpu:",max_cpu)
+        print("ID:",ID)
+        print("SBE_save:",SBE_save)
+        print("boundaries:",boundaries)
+        print("renormalize:",renormalize)
+        print("resample:",resample)
+        print("multiprocessor:",multiprocessor)
+
+
+        if max_cpu<0:
+            max_cpu = psutil.cpu_count(logical=False) 
 
         print("Loading grism configuration file:",config)
         self.C = grismconf.Config(config)
@@ -91,7 +113,7 @@ class observation():
         self.POM_mask01 = None
         self.renormalize = renormalize
         self.resample = resample
-        self.multiprocessing = multiprocessing 
+        self.multiprocessor = multiprocessor 
 
         if self.C.POM is not None:
             print("Using POM mask",self.C.POM)
@@ -132,8 +154,12 @@ class observation():
         if self.extrapolate_SED:
             print("Warning: SED Extrapolation turned on.")
 
+        # if self.multiprocessor=='ray':
+        #     print("Using ray for multiprocessing")
+        #     ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
+
         self.apply_POM()
-        self.create_pixel_list()
+        # self.create_pixel_list()
         
         self.p_l = []
         self.p_a = []
@@ -275,7 +301,7 @@ class observation():
                     self.fs[l].append(dnew[self.ys[i],self.xs[i]] * photflam)
             else:
                 # Need to normalize the object stamps              
-                for ID in self.IDs:
+                for ID in tqdm(self.IDs,desc='Normalizing objects footprint'):
                     vg = self.seg==ID
                     dnew = d
                     
@@ -302,8 +328,10 @@ class observation():
             self.cached_object = {}
 
         self.simulated_image = np.zeros(self.dims,np.float)
-
-        for i in tqdm.tqdm(range(len(self.IDs))):
+        
+        self.create_pixel_list()
+        
+        for i in tqdm(range(len(self.IDs)),desc='Dispersing...'):
             if self.cache:
                 self.cached_object[i] = {}
                 self.cached_object[i]['x'] = []
@@ -403,27 +431,25 @@ class observation():
         chunksize = int(len(pars)/self.max_cpu)
         if chunksize<1:
             chunksize = 1
-        if self.multiprocessing=='ray':
-            ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
+        # if self.multiprocessor=='ray':
+        #     #ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
+            
+        #     chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
 
-            chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
+        #     result_ids = []
+        #     [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
 
-            result_ids = []
-            [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
-            results = ray.get(result_ids)
-        else:
-            results = []
-            with multiprocessing.Pool(processes=self.max_cpu) as mypool:
-                for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
-                 if np.shape(pp.transpose())==(1,6):
-                     continue
-                 results.appnd(pp)
+        #     results = ray.get(result_ids)
+        #     results = [item for sublist in results for item in sublist]
 
-        for result in results:
-            for pp in result:
-                pp = np.array(pp)
+        #     del result_ids
+        #     ##ray.shutdown()
+        # else:
+        with multiprocessing.Pool(processes=self.max_cpu) as mypool:
+            for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
                 if np.shape(pp.transpose())==(1,6):
                     continue
+                
                 x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
                 vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1]) 
@@ -432,7 +458,7 @@ class observation():
                 y = y[vg]
                 f = f[vg]
                 w = w[vg]
-                
+                        
                 if len(x)<1:
                     continue
 
@@ -468,7 +494,6 @@ class observation():
 
     def disperse_chunk(self,c):
         """Method that handles the dispersion. To be called after create_pixel_list()"""
-        #from multiprocessing import Pool
         import time
 
         if self.SED_file!=None:
@@ -569,65 +594,64 @@ class observation():
                 f = [lams,flxs]
                 pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
 
-
-
         time1 = time.time()
 
         this_object = np.zeros(self.dims,np.float)
         chunksize = int(len(pars)/self.max_cpu)
         if chunksize<1:
             chunksize = 1
-        if self.multiprocessing=='ray':
-            ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
+
+        chunksize = 10
+        #print(len(pars),self.max_cpu,chunksize)
+        if self.multiprocessor=='ray':
+#            ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
 
             chunked_pars = [pars[i * chunksize:(i + 1) * chunksize] for i in range((len(pars) + chunksize - 1) // chunksize )] 
 
             result_ids = []
             [result_ids.append(mega_helper.remote(cpars)) for cpars in chunked_pars]
+            
             results = ray.get(result_ids)
+            results = [item for sublist in results for item in sublist]
+
+            del result_ids
+            #ray.shutdown()
         else:
-            results = []
             with multiprocessing.Pool(processes=self.max_cpu) as mypool:
                 for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
-                 if np.shape(pp.transpose())==(1,6):
-                     continue
-                 results.appnd(pp)
-                 
-        for result in results:
-            for pp in result:
-                pp = np.array(pp)
-                if np.shape(pp.transpose())==(1,6):
-                    continue
-                x,y,w,f = pp[0],pp[1],pp[3],pp[4]
+                    if np.shape(pp.transpose())==(1,6):
+                        continue
+        
+                    x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
-                vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
+                    vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
 
-                x = x[vg]
-                y = y[vg]
-                f = f[vg]
-                w = w[vg]
-                
-                if len(x)<1:
-                    continue
+                    x = x[vg]
+                    y = y[vg]
+                    f = f[vg]
+                    w = w[vg]
+                        
+                    if len(x)<1:
+                        continue
+                        
+                    minx = int(min(x))
+                    maxx = int(max(x))
+                    miny = int(min(y))
+                    maxy = int(max(y))
+                    a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+                    self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
+                    this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
 
-                minx = int(min(x))
-                maxx = int(max(x))
-                miny = int(min(y))
-                maxy = int(max(y))
-                a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
-                self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
-                this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
-
-                if self.cache:
-                    self.cached_object[c]['x'].append(x)
-                    self.cached_object[c]['y'] .append(y)
-                    self.cached_object[c]['f'].append(f)
-                    self.cached_object[c]['w'].append(w)
-                    self.cached_object[c]['minx'].append(minx)
-                    self.cached_object[c]['maxx'].append(maxx)
-                    self.cached_object[c]['miny'].append(miny)
-                    self.cached_object[c]['maxy'].append(maxy)
-
+                    if self.cache:
+                        self.cached_object[c]['x'].append(x)
+                        self.cached_object[c]['y'] .append(y)
+                        self.cached_object[c]['f'].append(f)
+                        self.cached_object[c]['w'].append(w)
+                        self.cached_object[c]['minx'].append(minx)
+                        self.cached_object[c]['maxx'].append(maxx)
+                        self.cached_object[c]['miny'].append(miny)
+                        self.cached_object[c]['maxy'].append(maxy)
+            
         time2 = time.time()
 
         return this_object
@@ -639,7 +663,7 @@ class observation():
 
         self.simulated_image = np.zeros(self.dims,np.float)
 
-        for i in tqdm.tqdm(range(len(self.IDs)),desc="Dispersing from cache"):
+        for i in tqdm(range(len(self.IDs)),desc="Dispersing from cache"):
             this_object = self.disperse_chunk_from_cache(i,trans=trans)
 
 
