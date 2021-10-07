@@ -108,7 +108,7 @@ class Grism_seed():
             self.orders = C.orders
         else:
             self.orders = orders
-            
+
         for order in self.orders:
             boundaries = [self.xstart,self.xend,self.ystart,self.yend]
             self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize,resample=self.resample)
@@ -129,7 +129,7 @@ class Grism_seed():
 
         print("Dispersing orders ", orders)
         for order in orders:
-            print("Dispersing order ",order)
+            #print("Dispersing order ",order)
             if self.this_one[order].cache:
                 self.this_one[order].disperse_all_from_cache(trans=trans)
             else:
@@ -173,6 +173,7 @@ class Grism_seed():
         """
 
         # Initialize final image with the background estimate
+        final = 0.
         if (Back is None) and (BackLevel is not None):
             # Use pre-computed background from config file, scaled by BackLevel
             import grismconf
@@ -214,7 +215,16 @@ class Grism_seed():
             final = final + sim
         self.final = final  
         
-
+        if (Back is None) and (BackLevel is None) and (tofits!=None):
+            # Save the background image to a fits file
+            hprime = fits.PrimaryHDU()
+            himg = fits.ImageHDU(final)
+            himg.header['EXTNAME'] = 'BACKGRND'
+            himg.header['UNITS'] = 'e/s'
+            if BackLevel is not None:
+                himg.header['BackLevel'] = BackLevel
+            hlist = fits.HDUList([hprime, himg])
+            hlist.writeto(tofits, overwrite=True)
 
     def saveSingleFits(self,name):
         """A helper function to write the 2D simulated imae into a fits file

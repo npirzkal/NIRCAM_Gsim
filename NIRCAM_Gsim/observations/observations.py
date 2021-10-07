@@ -153,7 +153,9 @@ class observation():
         self.extrapolate_SED = extrapolate_SED # Allow for SED extrapolation
         if self.extrapolate_SED:
             print("Warning: SED Extrapolation turned on.")
-
+        if self.renormalize is False:
+            print("Warning: not re-normalizing sources to unity")
+            
         # if self.multiprocessor=='ray':
         #     print("Using ray for multiprocessing")
         #     ray.init(num_cpus=self.max_cpu,ignore_reinit_error=True)
@@ -309,8 +311,8 @@ class observation():
                         sum_seg = np.sum(dnew[vg]) # But normalize by the whole flux
                         if sum_seg!=0.:
                             dnew[vg] = dnew[vg]/sum_seg
-                    else:
-                        print("not re-normalizing sources to unity")
+                    # else:
+                    #     print("not re-normalizing sources to unity")
 
                     if self.POM_mask01 is not None:
                         #print("Applying POM transmission to data")
@@ -331,7 +333,7 @@ class observation():
         
         self.create_pixel_list()
         
-        for i in tqdm(range(len(self.IDs)),desc='Dispersing...'):
+        for i in tqdm(range(len(self.IDs)),desc='Dispersing order {}'.format(self.order)):
             if self.cache:
                 self.cached_object[i] = {}
                 self.cached_object[i]['x'] = []
@@ -496,6 +498,7 @@ class observation():
         """Method that handles the dispersion. To be called after create_pixel_list()"""
         import time
 
+
         if self.SED_file!=None:
             # We use an input spectrum file
             import h5py
@@ -559,10 +562,11 @@ class observation():
                     else:
                         fffs = fffs * POM_value
 
-                    f = [lams,fffs]
-                    xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
-                    ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-                    pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
+                    if len(lams)>0:
+                        f = [lams,fffs]
+                        xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
+                        ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
+                        pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
         else:
             # No spectrum passed
             pars = []
@@ -591,8 +595,9 @@ class observation():
                 else:
                     flxs = flxs * POM_value
 
-                f = [lams,flxs]
-                pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
+                if len(lams)>0:
+                    f = [lams,flxs]
+                    pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
 
         time1 = time.time()
 
@@ -663,7 +668,7 @@ class observation():
 
         self.simulated_image = np.zeros(self.dims,np.float)
 
-        for i in tqdm(range(len(self.IDs)),desc="Dispersing from cache"):
+        for i in tqdm(range(len(self.IDs)),desc="Dispersing order {} from cache".format(self.order)):
             this_object = self.disperse_chunk_from_cache(i,trans=trans)
 
 
