@@ -56,7 +56,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=-1,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True, multiprocessor='multiprocessing'):
+    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=-1,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True, multiprocessor='multiprocessing',seed_cube=None):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -69,6 +69,8 @@ class observation():
         multiprocessor: 'multiprocessing' for native Python.
         """
         print("direct_images:",direct_images)
+        if not seed_cube is None:
+            print("Seed images: 3D cube")
         #print("segmentation_data:",segmentation_data)
         print("config:",config)
         print("mod:",mod)
@@ -103,6 +105,7 @@ class observation():
         self.IDs = []
         self.dir_images = direct_images
         self.seg = segmentation_data
+        self.c3d = seed_cube
         self.dims = np.shape(self.seg)
         self.order = order
         self.SED_file = SED_file
@@ -192,6 +195,14 @@ class observation():
             self.seg[:,x1:] = 0
             self.seg[:y0+1,:] = 0
             self.seg[y1:,:] = 0
+            
+            if not self.c3d is None:
+                for k in self.c3d.keys():
+                    sx0,sy0,dsata,sseg = self.c3d[k]
+                    sx1 = sx0 + np.shape(sseg)[1]
+                    sy1 = sy0 + np.shape(sseg)[0]
+                    self.c3d[k][3] = self.c3d[k][3] * self.seg[sy0:sy1,sx0:sx1]
+
         else:
             self.Pxstart - self.xstart
             self.Pystart - self.ystart
@@ -235,7 +246,7 @@ class observation():
             # to be able to account for partial transmission later on.
     
 
-            from astropy.io import fits
+            #from astropy.io import fits
             #print("POM size:",np.shape(POM))
             #print("seg size:",np.shape(self.seg))
             #fits.writeto("seg_org.fits",self.seg,overwrite=True)
@@ -245,10 +256,20 @@ class observation():
             #fits.writeto("POM_msk.fits",self.POM_mask,overwrite=True)
             #fits.writeto("POM.fits",self.POM_mask01 ,overwrite=True)
             #fits.writeto("seg_msk.fits",self.seg,overwrite=True)
+            if not self.c3d is None:
+                for k in self.c3d.keys():
+                    sx0,sy0,dsata,sseg = self.c3d[k]
+                    sx1 = sx0 + np.shape(sseg)[1]
+                    sy1 = sy0 + np.shape(sseg)[0]
+                    self.c3d[k][3] = self.c3d[k][3] * mask[sy0:sy1,sx0:sx1]
 
-        #sys.exit(1)
     def create_pixel_list(self):
         # Create a list of pixels to dispersed, grouped per object ID
+        if not self.c3d is None:
+            print("Using seed cube")
+            self.create_pixel_list_from_seed_cube()
+            return
+
         if self.ID==0:
             self.xs = []
             self.ys = []
@@ -287,6 +308,7 @@ class observation():
                     print("WARNING: unable to find PHOTFLAM keyword in {}".format(dir_image))
                     sys.exit()
                 print("Loaded",dir_image, "wavelength:",l,"micron")
+
             try:
                 d = fits.open(dir_image)[1].data
             except:
@@ -299,8 +321,10 @@ class observation():
                 dnew = d
                 if self.POM_mask01 is not None:
                     dnew = d * self.POM_mask01 # Apply POM transmission mask to the data pixels
+
                 for i in range(len(self.IDs)):
                     self.fs[l].append(dnew[self.ys[i],self.xs[i]] * photflam)
+
             else:
                 # Need to normalize the object stamps              
                 for ID in tqdm(self.IDs,desc='Normalizing objects footprint'):
@@ -321,6 +345,70 @@ class observation():
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):
                     self.fs["SED"].append(dnew[self.ys[i],self.xs[i]])
+
+    def create_pixel_list_from_seed_cube(self):
+        # Create a list of pixels to dispersed, grouped per object ID
+        dir_image = self.dir_images[0]
+        if self.SED_file==None:
+            try:
+                l = fits.getval(dir_image,'PHOTPLAM') / 10000. # in Angsrrom and we want Micron now
+            except:
+                print("WARNING: unable to find PHOTPLAM keyword in {}".format(dir_image))
+                sys.exit()
+
+            try:
+                photflam = fits.getval(dir_image,'photflam')
+            except:
+                print("WARNING: unable to find PHOTFLAM keyword in {}".format(dir_image))
+                sys.exit()
+            print("Loaded",dir_image, "wavelength:",l,"micron")
+            
+        if self.ID==0:
+            self.IDs = np.array(list(set(np.ravel(self.seg))))
+            self.IDs = self.IDs[self.IDs>0]
+        else:
+            self.IDs = [self.ID]
+
+
+        self.xs = []
+        self.ys = []
+        self.fs = {}
+
+        if self.SED_file==None:
+            self.fs[l] = []
+        else:
+            self.fs["SED"] = []
+
+        print("We have ",len(self.IDs),"Objects")
+        for ID in self.IDs:
+            data_stp = self.c3d[ID][2]*1
+            seg_stp = self.c3d[ID][3]*1
+            ys0,xs0 = np.nonzero(seg_stp>0)
+            xs = xs0 + self.c3d[ID][0]
+            ys = ys0 + self.c3d[ID][1]
+            # Coords in full frame
+            xmin = self.c3d[ID][0]
+            ymin = self.c3d[ID][1]
+            xmax = xmin + np.shape(data_stp)[1]
+            ymax = ymin + np.shape(data_stp)[0]
+
+            self.xs.append(xs)
+            self.ys.append(ys)
+        
+            if self.POM_mask01 is not None:
+                data_stp = data_stp * self.POM_mask01[ymin:ymax,xmin:xmax]
+
+            # If we do not use an SED file then we use photometry to get fluxes
+            # Otherwise, we assume that objects are normalized to 1.
+            if self.SED_file==None:
+                    self.fs[l].append(data_stp[ys0,xs0] * photflam)
+            else:
+                # Need to normalize the object stamps                                  
+                if self.renormalize is True:
+                    sum_data_stp = np.sum(data_stp) # But normalize by the whole flux
+                    if sum_data_stp!=0.:
+                        data_stp = data_stp/sum_data_stp
+                self.fs["SED"].append(data_stp[ys0,xs0])
     
     def disperse_all(self,cache=False):
 
@@ -504,8 +592,8 @@ class observation():
             import h5py
             with h5py.File(self.SED_file,'r') as h5f:
                 pars = []
-                ID = int(self.seg[self.ys[c][0],self.xs[c][0]])
-
+                ###ID = int(self.seg[self.ys[c][0],self.xs[c][0]])
+                ID = int(self.IDs[c])
                 tmp = h5f["%s" % (ID)][:]
 
                 if self.resample:

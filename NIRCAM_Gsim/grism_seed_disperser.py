@@ -5,7 +5,7 @@ Code to generate WFSS dispersed seed images. Starting with a set of imaging seed
 potentially with padding, given a JWST WFSS GRISMCONF configuration file
 """
 
-import os
+import os, pickle
 from astropy.io import fits
 import numpy as np
 from .observations.observations \
@@ -19,7 +19,7 @@ class Grism_seed():
         Attributes
         ----------
         image_seeds: list
-            A list of image image_seeds
+            A list of image image_seeds or of seed cube files
         cross_filter: str
             A string containing the name of a direct filter
         mode: str
@@ -54,6 +54,7 @@ class Grism_seed():
         self.config = config
         
         self.image_seeds = image_seeds
+        self.c3d = None
         self.cross_filter = cross_filter
         self.mode = mode
         self.config_path = config_path
@@ -84,6 +85,21 @@ class Grism_seed():
         self.renormalize = renormalize
         self.resample = resample
 
+        # temp 
+        # Check if we have seed cube and use these instead... we just load them 
+        print("image_seeds:",image_seeds)
+
+        if "_ptsrc_seed_image.fits" in image_seeds[0]:
+            sc3d = image_seeds[0].split("_uncal")[0]+"_uncal_star_seed_cube.pickle"
+            if os.path.isfile(sc3d):
+                print("ptsrc seg seed data found")
+                self.c3d = pickle.load(open(sc3d,"rb"))
+        if "_extended_seed_image.fits" in image_seeds[0]:
+            sc3d = image_seeds[0].split("_uncal.fits")[0]+"_uncal_galaxy_seed_cube.pickle"
+            if os.path.isfile(sc3d):
+                print("extended seg seed data found")
+                self.c3d = pickle.load(open(sc3d,"rb"))
+
     def observation(self,orders=None,max_split=-1000,ID=0):
         """Sets up an observation.
 
@@ -111,7 +127,7 @@ class Grism_seed():
 
         for order in self.orders:
             boundaries = [self.xstart,self.xend,self.ystart,self.yend]
-            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize,resample=self.resample)
+            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,seed_cube=self.c3d,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize,resample=self.resample)
             #self.this_one[order].disperse_all()
 
     def disperse(self,orders=None,cache=False,trans=None):
