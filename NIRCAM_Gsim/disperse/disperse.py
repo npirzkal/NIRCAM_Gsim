@@ -3,7 +3,7 @@ import numpy as np
 from ..polyclip.polyclip import polyclip
 
 
-def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=False,xoffset=0,yoffset=0):
+def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=False,xoffset=0,yoffset=0,outbound=False):
     """This function take a list of pixels and disperses them using the information contained
     in a GRISMCONF file, and returns a list of pixel and fluxes.
 
@@ -59,6 +59,17 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
     x0 = np.mean(x0s)
     y0 = np.mean(y0s)
 
+    x00 = x0+xoffset
+    y00 = y0+yoffset
+
+    if outbound is False:
+        if x00<0: x00=0
+        if y00<0: y00=0
+        if x00>C.NAXIS[0]: x00=C.NAXIS[0]
+        if y00>C.NAXIS[1]: y00=C.NAXIS[1]
+
+
+
     dx0s = [t-x0 for t in x0s]
     dy0s = [t-y0 for t in y0s]
     
@@ -66,11 +77,11 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
     wmin = C.WRANGE[order][0]
     wmax = C.WRANGE[order][1]
 
-    t0 = C.INVDISPL(order,x0+xoffset,y0+yoffset,wmin)
-    t1 = C.INVDISPL(order,x0+xoffset,y0+yoffset,wmax)
+    t0 = C.INVDISPL(order,x00,y00,wmin)
+    t1 = C.INVDISPL(order,x00,y00,wmax)
     
-    dx0 = C.DISPX(order,x0+xoffset,y0+yoffset,t0) - C.DISPX(order,x0+xoffset,y0+yoffset,t1)
-    dx1 = C.DISPY(order,x0+xoffset,y0+yoffset,t0) - C.DISPY(order,x0+xoffset,y0+yoffset,t1)
+    dx0 = C.DISPX(order,x00,y00,t0) - C.DISPX(order,x00,y00,t1)
+    dx1 = C.DISPY(order,x00,y00,t0) - C.DISPY(order,x00,y00,t1)
 
     dw = np.abs((wmax-wmin)/(dx1-dx0))
 
@@ -87,12 +98,12 @@ def dispersed_pixel(x0s,y0s,f0,order,C,ID,oversample_factor=2,extrapolate_SED=Fa
 
     lambdas = np.arange(wmin,wmax+dlam,dlam)
 
-    dS = C.INVDISPL(order,x0+xoffset,y0+yoffset,lambdas)
+    dS = C.INVDISPL(order,x00,y00,lambdas)
 
     m = len(lambdas)
 
-    dXs = C.DISPX(order,x0+xoffset,y0+yoffset,dS)
-    dYs = C.DISPY(order,x0+xoffset,y0+yoffset,dS)
+    dXs = C.DISPX(order,x00,y00,dS)
+    dYs = C.DISPY(order,x00,y00,dS)
 
     x0s = x0 + dXs 
     y0s = y0 + dYs 

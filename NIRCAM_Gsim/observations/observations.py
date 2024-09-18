@@ -14,6 +14,7 @@ import multiprocessing
 #import ray
 from tqdm import tqdm
 import psutil
+import pickle
 
 class interp1d_picklable(object):
     """ class wrapper for piecewise linear function
@@ -38,8 +39,8 @@ def comprehension_flatten( aList ):
         return list(y for x in aList for y in x)
 
 def helper(vars):
-    x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset = vars # in this case ID is dummy number
-    p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset)
+    x0s,y0s,f,order,C,ID,extrapolate_SED, xoffset, yoffset, outbound = vars # in this case ID is dummy number
+    p = dispersed_pixel(x0s,y0s,f,order,C,ID,extrapolate_SED=extrapolate_SED,xoffset=xoffset,yoffset=yoffset,outbound=outbound)
     xs, ys, areas, lams, counts,ID = p
     IDs = [ID] * len(xs)
 
@@ -56,7 +57,7 @@ def helper(vars):
 class observation():
     # This class defines an actual observations. It is tied to a single flt and a single config file
     
-    def __init__(self,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=-1,ID=0,SBE_save=None, boundaries=[], renormalize=True, resample=True, multiprocessor='multiprocessing',seed_cube=None):
+    def __init__(self,mypool,direct_images,segmentation_data,config,mod="A",order="+1",plot=0,max_split=100,SED_file=None,extrapolate_SED=False,max_cpu=-1,ID=0,SBE_save=None, boundaries=[], outbound=False,renormalize=True, resample=True, multiprocessor='multiprocessing',seed_cube=None,save_objects=None):
         """direct_images: List of file name containing direct imaging data
         segmentation_data: an array of the size of the direct images, containing 0 and 1's, 0 being pixels to ignore
         config: The path and name of a GRISMCONF NIRCAM configuration file
@@ -107,6 +108,7 @@ class observation():
         self.seg = segmentation_data
         self.c3d = seed_cube
         self.dims = np.shape(self.seg)
+        self.outbound = outbound
         self.order = order
         self.SED_file = SED_file
         self.SBE_save = SBE_save
@@ -117,6 +119,10 @@ class observation():
         self.renormalize = renormalize
         self.resample = resample
         self.multiprocessor = multiprocessor 
+        self.mypool = mypool
+        self.save_objects = save_objects
+
+        print("Ooutbound is",outbound)
 
         if self.C.POM is not None:
             print("Using POM mask",self.C.POM)
@@ -250,7 +256,7 @@ class observation():
             #print("POM size:",np.shape(POM))
             #print("seg size:",np.shape(self.seg))
             #fits.writeto("seg_org.fits",self.seg,overwrite=True)
-            mask = np.zeros(np.shape(self.POM_mask01),np.int)
+            mask = np.zeros(np.shape(self.POM_mask01),int)
             mask[self.POM_mask01>0] = 1
             self.seg = self.seg * mask
             #fits.writeto("POM_msk.fits",self.POM_mask,overwrite=True)
@@ -265,9 +271,17 @@ class observation():
 
     def create_pixel_list(self):
         # Create a list of pixels to dispersed, grouped per object ID
+
+
+
         if not self.c3d is None:
             print("Using seed cube")
             self.create_pixel_list_from_seed_cube()
+            return
+
+        if self.save_objects is not None and os.path.isfile(self.save_objects):
+            print("Loading from pre-computed ",self.save_objects)
+            self.IDs,self.xs,self.ys,self.fs = pickle.load(open(self.save_objects,"rb"))
             return
 
         if self.ID==0:
@@ -275,8 +289,14 @@ class observation():
             self.ys = []
             all_IDs = np.array(list(set(np.ravel(self.seg))))
             all_IDs = all_IDs[all_IDs>0]
+
+            # Remove
+            # self.IDs = self.IDs[0:10]
+            # all_IDs = all_IDs[0:10]
+            #
+
             print("We have ",len(all_IDs),"Objects")
-            for ID in all_IDs:
+            for ID in tqdm(all_IDs):
                 ys,xs = np.nonzero(self.seg==ID)
 
                 if (len(xs)>0) & (len(ys)>0):
@@ -345,6 +365,11 @@ class observation():
                 self.fs["SED"] = []
                 for i in range(len(self.IDs)):
                     self.fs["SED"].append(dnew[self.ys[i],self.xs[i]])
+        if self.save_objects is not None:
+            print("Saving pre-computed objects to ",self.save_objects)
+            pickle.dump([self.IDs, self.xs,self.ys,self.fs],open(self.save_objects,"wb"))
+
+        print("Done")
 
     def create_pixel_list_from_seed_cube(self):
         # Create a list of pixels to dispersed, grouped per object ID
@@ -417,7 +442,7 @@ class observation():
             self.cache = True
             self.cached_object = {}
 
-        self.simulated_image = np.zeros(self.dims,np.float)
+        self.simulated_image = np.zeros(self.dims,float)
         
         self.create_pixel_list()
         
@@ -513,10 +538,10 @@ class observation():
             ID = 1
             xs0 = [xs[i],xs[i]+1,xs[i]+1,xs[i]]
             ys0 = [ys[i],ys[i],ys[i]+1,ys[i]+1]
-            pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart])
+            pars.append([xs0,ys0,f,self.order,C,ID,False,self.xstart,self.ystart,self.outbound])
 
 
-        bck = np.zeros(naxis,np.float)
+        bck = np.zeros(naxis,float)
 
         chunksize = int(len(pars)/self.max_cpu)
         if chunksize<1:
@@ -535,29 +560,28 @@ class observation():
         #     del result_ids
         #     ##ray.shutdown()
         # else:
-        with multiprocessing.Pool(processes=self.max_cpu) as mypool:
-            for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
-                if np.shape(pp.transpose())==(1,6):
-                    continue
-                
-                x,y,w,f = pp[0],pp[1],pp[3],pp[4]
+        for pp in self.mypool.imap_unordered(helper, pars, chunksize=chunksize):
+            if np.shape(pp.transpose())==(1,6):
+                continue
+            
+            x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
-                vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1]) 
+            vg = (x>=0) & (x<naxis[0]) & (y>=0) & (y<naxis[1]) 
 
-                x = x[vg]
-                y = y[vg]
-                f = f[vg]
-                w = w[vg]
-                        
-                if len(x)<1:
-                    continue
+            x = x[vg]
+            y = y[vg]
+            f = f[vg]
+            w = w[vg]
+                    
+            if len(x)<1:
+                continue
 
-                minx = int(min(x))
-                maxx = int(max(x))
-                miny = int(min(y))
-                maxy = int(max(y))
-                a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
-                bck[miny:maxy+1,minx:maxx+1] = bck[miny:maxy+1,minx:maxx+1] + a
+            minx = int(min(x))
+            maxx = int(max(x))
+            miny = int(min(y))
+            maxy = int(max(y))
+            a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+            bck[miny:maxy+1,minx:maxx+1] = bck[miny:maxy+1,minx:maxx+1] + a
 
         if direction=="x":
             bck = np.sum(bck,axis=0)
@@ -654,7 +678,7 @@ class observation():
                         f = [lams,fffs]
                         xs0 = [self.xs[c][i],self.xs[c][i]+1,self.xs[c][i]+1,self.xs[c][i]]
                         ys0 = [self.ys[c][i],self.ys[c][i],self.ys[c][i]+1,self.ys[c][i]+1]
-                        pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
+                        pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart,self.outbound])
         else:
             # No spectrum passed
             pars = []
@@ -685,11 +709,11 @@ class observation():
 
                 if len(lams)>0:
                     f = [lams,flxs]
-                    pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart])
+                    pars.append([xs0,ys0,f,self.order,self.C,ID,self.extrapolate_SED,self.xstart,self.ystart,self.outbound])
 
         time1 = time.time()
 
-        this_object = np.zeros(self.dims,np.float)
+        this_object = np.zeros(self.dims,float)
         chunksize = int(len(pars)/self.max_cpu)
         if chunksize<1:
             chunksize = 1
@@ -710,40 +734,40 @@ class observation():
             del result_ids
             #ray.shutdown()
         else:
-            with multiprocessing.Pool(processes=self.max_cpu) as mypool:
-                for pp in mypool.imap_unordered(helper, pars, chunksize=chunksize):
-                    if np.shape(pp.transpose())==(1,6):
-                        continue
-        
-                    x,y,w,f = pp[0],pp[1],pp[3],pp[4]
+            #with multiprocessing.Pool(processes=self.max_cpu) as mypool:
+            for pp in self.mypool.imap_unordered(helper, pars, chunksize=chunksize):
+                if np.shape(pp.transpose())==(1,6):
+                    continue
+    
+                x,y,w,f = pp[0],pp[1],pp[3],pp[4]
 
-                    vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) 
+                vg = (x>=0) & (x<self.dims[1]) & (y>=0) & (y<self.dims[0]) & (np.isfinite(f)) 
 
-                    x = x[vg]
-                    y = y[vg]
-                    f = f[vg]
-                    w = w[vg]
-                        
-                    if len(x)<1:
-                        continue
-                        
-                    minx = int(min(x))
-                    maxx = int(max(x))
-                    miny = int(min(y))
-                    maxy = int(max(y))
-                    a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
-                    self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
-                    this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
+                x = x[vg]
+                y = y[vg]
+                f = f[vg]
+                w = w[vg]
+                    
+                if len(x)<1:
+                    continue
+                    
+                minx = int(min(x))
+                maxx = int(max(x))
+                miny = int(min(y))
+                maxy = int(max(y))
+                a = sparse.coo_matrix((f, (y-miny, x-minx)), shape=(maxy-miny+1,maxx-minx+1)).toarray()
+                self.simulated_image[miny:maxy+1,minx:maxx+1] = self.simulated_image[miny:maxy+1,minx:maxx+1] + a
+                this_object[miny:maxy+1,minx:maxx+1] = this_object[miny:maxy+1,minx:maxx+1] + a
 
-                    if self.cache:
-                        self.cached_object[c]['x'].append(x)
-                        self.cached_object[c]['y'] .append(y)
-                        self.cached_object[c]['f'].append(f)
-                        self.cached_object[c]['w'].append(w)
-                        self.cached_object[c]['minx'].append(minx)
-                        self.cached_object[c]['maxx'].append(maxx)
-                        self.cached_object[c]['miny'].append(miny)
-                        self.cached_object[c]['maxy'].append(maxy)
+                if self.cache:
+                    self.cached_object[c]['x'].append(x)
+                    self.cached_object[c]['y'] .append(y)
+                    self.cached_object[c]['f'].append(f)
+                    self.cached_object[c]['w'].append(w)
+                    self.cached_object[c]['minx'].append(minx)
+                    self.cached_object[c]['maxx'].append(maxx)
+                    self.cached_object[c]['miny'].append(miny)
+                    self.cached_object[c]['maxy'].append(maxy)
             
         time2 = time.time()
 
@@ -754,7 +778,7 @@ class observation():
             print("No cached object stored.")
             return
 
-        self.simulated_image = np.zeros(self.dims,np.float)
+        self.simulated_image = np.zeros(self.dims,float)
 
         for i in tqdm(range(len(self.IDs)),desc="Dispersing order {} from cache".format(self.order)):
             this_object = self.disperse_chunk_from_cache(i,trans=trans)
@@ -771,7 +795,7 @@ class observation():
 
         time1 = time.time()
         
-        this_object = np.zeros(self.dims,np.float)
+        this_object = np.zeros(self.dims,float)
 
         if trans!=None:
                 print("Applying a transmission function...")

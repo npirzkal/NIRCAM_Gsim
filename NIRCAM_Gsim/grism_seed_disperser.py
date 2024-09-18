@@ -10,10 +10,10 @@ from astropy.io import fits
 import numpy as np
 from .observations.observations \
 import observation as Gsim_observation 
-from multiprocessing import cpu_count 
-    
+import multiprocessing
+
 class Grism_seed():
-    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=None, SBE_save=None, renormalize=True, resample=False):
+    def __init__(self,image_seeds,cross_filter,mode,config_path=".",extrapolate_SED=False,SED_file=None,instrument="NIRCAM",max_cpu=None, SBE_save=None, renormalize=True, resample=False, outbound=False, save_objects=None):
         """A class for a grism simulation
 
         Attributes
@@ -40,6 +40,9 @@ class Grism_seed():
             Whether to renormalize the input data to unity over segmentation map area when using an input spectrum.
         reaample: bol
             If true, the disperser will first smooth and resample input spectra appropriately to match the disperser resolution.
+        save_objest: None or filename
+            Save computed objects footprints for future use
+
         Methods
         -------
         observation(self,orders=["+1","+2"],max_split=-1000,ID=0)
@@ -59,7 +62,7 @@ class Grism_seed():
         self.mode = mode
         self.config_path = config_path
         if max_cpu is None:
-            max_cpu = cpu_count() - 1
+            max_cpu = multiprocessing.cpu_count() - 1
 
         self.max_cpu = max_cpu
         self.SBE_save = SBE_save
@@ -84,6 +87,11 @@ class Grism_seed():
         self.SED_file = SED_file
         self.renormalize = renormalize
         self.resample = resample
+        self.outbound = outbound
+        self.save_objects = save_objects
+
+        print("Initializing Pool with",self.max_cpu,"cores")
+        self.mypool =  multiprocessing.Pool(processes=self.max_cpu)
 
         # temp 
         # Check if we have seed cube and use these instead... we just load them 
@@ -127,7 +135,7 @@ class Grism_seed():
 
         for order in self.orders:
             boundaries = [self.xstart,self.xend,self.ystart,self.yend]
-            self.this_one[order] = Gsim_observation(self.image_seeds,self.seg_data,self.config,seed_cube=self.c3d,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize,resample=self.resample)
+            self.this_one[order] = Gsim_observation(self.mypool,self.image_seeds,self.seg_data,self.config,seed_cube=self.c3d,order=order,max_split=max_split,extrapolate_SED=self.extrapolate_SED,SED_file=self.SED_file,max_cpu=self.max_cpu,ID=ID, SBE_save=self.SBE_save,boundaries=boundaries,renormalize=self.renormalize,resample=self.resample, outbound=self.outbound, save_objects=self.save_objects)
             #self.this_one[order].disperse_all()
 
     def disperse(self,orders=None,cache=False,trans=None):
